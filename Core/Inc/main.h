@@ -46,14 +46,15 @@ extern "C" {
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-
+#define ADC_BUFFER_LENGTH 40  // pid调控频率为PWM频率(100kHz) / ADC触发器分频(10) / ADC缓冲区的一半(20) = 500Hz
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-void ADC_read_task(void *pvParameters);
+void ADC_init(void); // 简单封装
+void pid_ctrl_init(void);
 
 /* USER CODE END EFP */
 

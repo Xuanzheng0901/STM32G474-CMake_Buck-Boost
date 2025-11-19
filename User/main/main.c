@@ -6,7 +6,6 @@
 #include "usart.h"
 #include "stdio_ext.h"
 #include "string.h"
-#include "../components/FATFS/app_flash.h"
 #include "hrtim.h"
 #include "lvgl.h"
 #include "../components/stm_lvgl_port/lv_port_disp_template.h"
@@ -26,7 +25,8 @@ void app_main(void)
 {
     lv_port_disp_init();
     home_page_init();
-    xTaskCreate(ADC_read_task, "ADC", 1024, NULL, 50, &adc_task_handle);
+    ADC_init();
+    pid_ctrl_init();
     xTaskCreate(LED_task0, "LED", 128, NULL, 10, NULL);
     HAL_HRTIM_WaveformCounterStart(&hhrtim1, HRTIM_TIMERID_TIMER_E);
     HAL_HRTIM_WaveformOutputStart(&hhrtim1, HRTIM_OUTPUT_TE1 | HRTIM_OUTPUT_TE2);
