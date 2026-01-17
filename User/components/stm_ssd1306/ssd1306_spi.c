@@ -12,7 +12,7 @@ void ssd1306_reset(void)
 
 void ssd1306_dc(ssd1306_DC dc)
 {
-    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4, (GPIO_PinState)dc);
+    HAL_GPIO_WritePin(SPI_DC_GPIO_Port, SPI_DC_Pin, (GPIO_PinState)dc);
 }
 
 void ssd1306_tx_cmd(uint8_t cmd, const uint8_t *param, size_t param_size)

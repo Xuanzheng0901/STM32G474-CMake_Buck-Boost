@@ -1,5 +1,5 @@
 #include <stdint.h>
-
+#include "ssd1306.h"
 #include "ssd1306_internal.h"
 
 void ssd1306_init(void)
@@ -36,7 +36,7 @@ void ssd1306_init(void)
 
     // 8. 清屏 (可选, 但推荐)
     // uint8_t clear_buffer[SSD1306_WIDTH * SSD1306_HEIGHT / 8] = {0};
-    // ssd1306_fill(clear_buffer); // 您需要一个发送全屏数据的函数
+    // ssd1306_draw(clear_buffer); // 您需要一个发送全屏数据的函数
 
     // 9. 打开屏幕
     ssd1306_tx_cmd(0xAF, NULL, 0); // SSD1306_CMD_DISP_ON
