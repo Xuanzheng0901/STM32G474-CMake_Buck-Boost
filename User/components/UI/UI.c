@@ -1,10 +1,11 @@
 #include <stdio.h>
-
 #include "lvgl.h"
-#include "../stm_lvgl_port/lv_port_disp_template.h"
+#include "lv_port_disp_template.h"
 #include "FreeRTOS.h"
 #include "task.h"
-#include "../stm_lvgl_port/stm32_lvgl_port_knob.h"
+#include "stm32_lvgl_port_knob.h"
+#include "tim.h"
+#include "PID.h"
 
 extern lv_obj_t *highlight_frame;
 extern lv_anim_t focus_anim;
@@ -29,36 +30,55 @@ static void lvgl_event_cb(lv_event_t *evt)
     // // ESP_LOGI(TAG, "Value changed: %ld", value);
     if(lv_event_get_current_target(evt) == voltage_spinbox)
     {
-        // pid_set_voltage(value * 10);
-        snprintf(value_buf[0], 32, "%ld", value);
-        lv_obj_invalidate(voltage_label);
+        pid_set_voltage(value * 10);
+        // snprintf(value_buf[0], 32, "%ld", value);
+        // lv_obj_invalidate(voltage_label);
     }
-    else
+    else if(lv_event_get_current_target(evt) == current_spinbox)
     {
         // set_current(value * 10);
-        snprintf(value_buf[1], 32, "%ld", value);
-        lv_obj_invalidate(current_label);
+        // snprintf(value_buf[1], 32, "%ld", value);
+        // lv_obj_invalidate(current_label);
+    }
+}
+
+static void value_update_task(void *arg)
+{
+    float voltage = 0.0f, current = 0.0f;
+    while(1)
+    {
+        vTaskDelay(100);
+        voltage = get_voltage_value(0) / 1000.0f;
+        current = get_voltage_value(1);
+        snprintf(value_buf[0], 6, "%5.2f", voltage);
+        snprintf(value_buf[1], 5, "%4.2f", current);
+        snprintf(value_buf[2], 8, "%6.2fW", voltage * current);
+
+        if(lvgl_port_lock(portMAX_DELAY))
+        {
+            lv_label_set_text_static(voltage_label, value_buf[0]);
+            lv_label_set_text_static(current_label, value_buf[1]);
+            lv_label_set_text_static(power_value_label, value_buf[2]);
+            lvgl_port_unlock();
+        }
     }
 }
 
 
-void indev_init(void)
+static void indev_init(void)
 {
     button_handle_t btn_handle = NULL;
     button_config_t btn_cfg = {0};
     button_gpio_config_t gpio_cfg = {
         .active_level = 0,
         .port = GPIOB,
-        .pin = GPIO_PIN_3
+        .pin = GPIO_PIN_5
     };
     iot_button_create_gpio(&btn_cfg, &gpio_cfg, &btn_handle);
 
     knob_config_t knob_cfg = {
         .default_direction = 0,
-        .port_encoder_a = GPIOB,
-        .pin_encoder_a = GPIO_PIN_4,
-        .port_encoder_b = GPIOB,
-        .pin_encoder_b = GPIO_PIN_5
+        .htim = &htim2,
     };
     lvgl_port_encoder_cfg_t encoder_cfg = {
         .disp = lv_display_get_default(),
@@ -70,9 +90,8 @@ void indev_init(void)
     lv_indev_set_group(indev, group);
 }
 
-void home_page_init(void)
+static void home_page_init(void)
 {
-    indev_init();
     if(lvgl_port_lock(portMAX_DELAY))
     {
         lv_obj_t *label1 = lv_label_create(lv_screen_active());
@@ -200,5 +219,16 @@ void home_page_init(void)
         lv_obj_add_event_cb(voltage_spinbox, focus_event_cb, LV_EVENT_FOCUSED, NULL);
         lv_obj_add_event_cb(current_spinbox, focus_event_cb, LV_EVENT_FOCUSED, NULL);
         lvgl_port_unlock();
+    }
+}
+
+void display_init(void)
+{
+    lv_port_disp_init();
+    indev_init();
+    home_page_init();
+    if(xTaskCreate(value_update_task, "update value", 384, NULL, 10, NULL) != pdPASS)
+    {
+        printf("update value task creation failed\n");
     }
 }

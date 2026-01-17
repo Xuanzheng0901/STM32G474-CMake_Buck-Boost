@@ -1,21 +1,11 @@
 /**
- * @file lv_port_disp_templ.h
+ * @file lv_port_disp_template.h
  *
  */
-
-/*Copy this file as "lv_port_disp.h" and set this value to "1" to enable content*/
-#if 1
 
 #ifndef LV_PORT_DISP_TEMPL_H
 #define LV_PORT_DISP_TEMPL_H
 
-#ifdef __cplusplus
-extern "C"
-{
-
-
-
-#endif
 
 /*********************
  *      INCLUDES
@@ -44,6 +34,9 @@ typedef struct {
  * GLOBAL PROTOTYPES
  **********************/
 /* Initialize low level display driver */
+
+void display_init(void);
+
 void lv_port_disp_init(void);
 
 /* Enable updating the screen (the flushing process) when disp_flush() is called by LVGL
@@ -58,18 +51,9 @@ bool lvgl_port_lock(uint32_t timeout_ms);
 
 void lvgl_port_unlock(void);
 
-void home_page_init(void);
-
-void indev_init(void);
 
 /**********************
  *      MACROS
  **********************/
 
-#ifdef __cplusplus
-} /*extern "C"*/
-#endif
-
 #endif /*LV_PORT_DISP_TEMPL_H*/
-
-#endif /*Disable/Enable content*/
