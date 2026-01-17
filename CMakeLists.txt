@@ -84,3 +84,7 @@ target_include_directories(lvgl PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/Core/Inc
         ${CMAKE_CURRENT_SOURCE_DIR}/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F
 )
+
+target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
+        -u _printf_float
+)
