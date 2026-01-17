@@ -1,25 +1,37 @@
-#include "pid_ctrl.h"
+#include "pid_ctrl_internal.h"
 #include "FreeRTOS.h"
 #include "hrtim.h"
 #include "main.h"
 #include "task.h"
 #include "queue.h"
 
-extern QueueHandle_t adc_queue; // dma中断传输指针用队列
+extern QueueHandle_t adc_queue;
 
 static pid_ctrl_block_handle_t pid_handle = NULL;
-QueueHandle_t pid_ctrl_queue_mV = NULL; //传递数值单位为mV
+QueueHandle_t pid_ctrl_queue_mV = NULL; //单位为mV
+static float now_current_A = 0.0f, now_voltage_mV = 0.0f;
 
-static uint32_t voltage_to_pwm_duty(float voltage_mV)
+// --- 定义常量 ---
+#define PWM_PERIOD_ARR    PWM_Period
+#define INPUT_VOLTAGE_MV  30000.0f // 输入电压 (暂时假设30V)
+#define MAX_DUTY_RATIO    0.80f    // 最大占空比限制 (理论4倍升压)
+
+static uint32_t voltage_to_duty(float expect_mV)
 {
-    if(voltage_mV < 10.0f)
-    {
+    if(expect_mV < 0.1f)
         return 0;
-    }
-    uint32_t pwm_duty = (uint32_t)(1 / (1 + (30000.0f / voltage_mV)) * PWM_Period); //预设输入电压为30V
-    if(pwm_duty > PWM_Period * 0.6f)
-        pwm_duty = PWM_Period;
-    return pwm_duty;
+
+    float denominator = expect_mV + INPUT_VOLTAGE_MV;
+    float duty_cycle = 0.0f;
+
+    if(denominator > 1.0f)
+        duty_cycle = expect_mV / denominator;
+
+    // 硬件保护
+    if(duty_cycle > MAX_DUTY_RATIO)
+        duty_cycle = MAX_DUTY_RATIO;
+
+    return (uint32_t)(duty_cycle * PWM_PERIOD_ARR);
 }
 
 void pwm_set_duty(uint32_t pwm_duty)
@@ -27,12 +39,23 @@ void pwm_set_duty(uint32_t pwm_duty)
     hhrtim1.Instance->sTimerxRegs[4].CMP1CxR = pwm_duty;
 }
 
+float get_voltage_value(uint8_t index)
+{
+    if(index == 0)
+        return now_voltage_mV;
+    if(index == 1)
+        return now_current_A;
+
+    return 0.0f;
+}
+
+
 static void PID_ctrl_routine(void *pvParameters)
 {
-    static uint16_t last_duty = 0;
-    static uint32_t target_voltage_buffer_mV = 0;
     static uint32_t target_voltage_mV = 0;
-    static float pid_output_mV = 0.0f;
+    static uint32_t target_voltage_buffer_mV = 0;
+
+    static float next_output_voltage_mV = 0.0f;
 
     static uint32_t *buf_ptr;
 
@@ -40,44 +63,32 @@ static void PID_ctrl_routine(void *pvParameters)
     {
         if(xQueueReceive(adc_queue, &buf_ptr, portMAX_DELAY) == pdTRUE)
         {
-            do
+            if(pdPASS == xQueueReceive(pid_ctrl_queue_mV, &target_voltage_buffer_mV, 0))
             {
-                if(pdPASS == xQueueReceive(pid_ctrl_queue_mV, &target_voltage_buffer_mV, 0))
+                if(target_voltage_mV != target_voltage_buffer_mV)
                 {
-                    if(target_voltage_mV == target_voltage_buffer_mV)
-                        break;
                     target_voltage_mV = target_voltage_buffer_mV;
-                    // 目标改变时重置PID状态
-                    pwm_set_duty(last_duty);
                     pid_reset_ctrl_block(pid_handle);
-                    break;
                 }
             }
-            while(0); // 先检查目标电压有无更改
 
-            // 计算ADC平均值
-            float voltage_origin_summary = 0.0f;
-            float current_origin_summary = 0.0f;
+            float origin_voltage_sum = 0.0f, origin_current_sum = 0.0f;
             for(uint8_t i = 0; i < ADC_BUFFER_LENGTH / 2; i++)
             {
-                voltage_origin_summary += (uint16_t)buf_ptr[i];
-                current_origin_summary += buf_ptr[i] >> 16;
+                origin_voltage_sum += buf_ptr[i] & 0xFFFF;
+                origin_current_sum += buf_ptr[i] >> 16;
             }
-            voltage_origin_summary = voltage_origin_summary / 25.0f * 3300.0f / 4095.0f * 20.0f; //单位mV
-            current_origin_summary = current_origin_summary / 25.0f * 3300.0f / 4095.0f; //单位mV
+            //                                        读数平均值               读取到的电压  20分压
+            now_voltage_mV = origin_voltage_sum / (ADC_BUFFER_LENGTH / 2) / 4095.0f * 3300.0f * 20;
+            now_current_A = origin_current_sum / (ADC_BUFFER_LENGTH / 2) / 4095.0f * 3300.0f * 2 / 1000; //单位A
 
-            // 计算误差: error = 期望值 - 实际值
-            float err = (float)target_voltage_mV - voltage_origin_summary;
-            // PID计算 (位置式PID，输出为绝对控制量)
-            pid_compute(pid_handle, err, &pid_output_mV);
-
-            // 非线性补偿: 将PID输出的电压值映射到PWM占空比
-            uint16_t pwm_duty = voltage_to_pwm_duty(pid_output_mV);
-
-            // 更新PWM输出
-            pwm_set_duty(pwm_duty);
-            last_duty = pwm_duty;
+            // float error_mV = (float)target_voltage_mV - now_voltage_mV;
+            //
+            // pid_compute(pid_handle, error_mV, &next_output_voltage_mV);
+            // uint32_t output_duty = voltage_to_duty(next_output_voltage_mV);
+            // pwm_set_duty(output_duty);
         }
+        // vTaskDelay(1);
     }
 }
 
@@ -92,14 +103,14 @@ void pid_ctrl_init(void)
 {
     pid_ctrl_config_t pid_cfg = {
         .init_param = {
-            .kp = 0.01f,
-            .ki = 0.05f,
-            .kd = 0.02f,
-            .max_output = 80000.0f,
+            .kp = 0.05f,
+            .ki = 0.02f,
+            .kd = 0.0f,
+            .max_output = 40000.0f,
             .min_output = 0.0f,
-            .max_integral = 300.0f,
-            .min_integral = -300.0f,
-            .cal_type = PID_CAL_TYPE_POSITIONAL,
+            .max_integral = 10000.0f,
+            .min_integral = -10000.0f,
+            .cal_type = PID_CAL_TYPE_INCREMENTAL,
         }
     };
     pid_new_control_block(&pid_cfg, &pid_handle);

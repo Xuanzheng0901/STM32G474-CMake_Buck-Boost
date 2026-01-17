@@ -1,4 +1,4 @@
-#include "pid_ctrl.h"
+#include "pid_ctrl_internal.h"
 
 #include <stdlib.h>
 
