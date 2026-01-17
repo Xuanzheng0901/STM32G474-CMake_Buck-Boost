@@ -36,36 +36,31 @@ typedef enum {
 
 // 旋钮配置
 typedef struct {
-    uint8_t default_direction; // 0:右旋递增, 1:左旋递增
-    GPIO_TypeDef *port_encoder_a;
-    uint16_t pin_encoder_a;
-    GPIO_TypeDef *port_encoder_b;
-    uint16_t pin_encoder_b;
+    TIM_HandleTypeDef *htim; // 替换原本的 GPIO port/pin 定义
+    uint8_t default_direction; // 0: 顺时针增加, 1: 逆时针增加
+    // 其他配置项保持不变...
 } knob_config_t;
 
 // 创建旋钮
 knob_handle_t iot_knob_create(const knob_config_t *config);
 
 // 删除旋钮
-int iot_knob_delete(knob_handle_t knob_handle);
+int32_t iot_knob_delete(knob_handle_t knob_handle);
 
 // 注册回调
-int iot_knob_register_cb(knob_handle_t knob_handle, knob_event_t event, knob_cb_t cb, void *usr_data);
+int32_t iot_knob_register_cb(knob_handle_t knob_handle, knob_event_t event, knob_cb_t cb, void *usr_data);
 
 // 注销回调
-int iot_knob_unregister_cb(knob_handle_t knob_handle, knob_event_t event);
+int32_t iot_knob_unregister_cb(knob_handle_t knob_handle, knob_event_t event);
 
 // 获取事件
 knob_event_t iot_knob_get_event(knob_handle_t knob_handle);
 
 // 获取计数值
-int iot_knob_get_count_value(knob_handle_t knob_handle);
+int32_t iot_knob_get_count_value(knob_handle_t knob_handle);
 
 // 清除计数值
-int iot_knob_clear_count_value(knob_handle_t knob_handle);
-
-// 从外部中断恢复（唤醒）扫描定时器
-void iot_knob_resume_from_isr(void);
+int32_t iot_knob_clear_count_value(knob_handle_t knob_handle);
 
 #ifdef __cplusplus
 }

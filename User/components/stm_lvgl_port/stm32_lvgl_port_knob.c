@@ -7,12 +7,10 @@
 
 #include <stdlib.h>
 #include <assert.h>
-#include <string.h> // For memset
+#include <string.h>
 #include "stm32_lvgl_port_knob.h"
-
 #include <stdio.h>
 
-// 调试日志
 #define LVGL_PORT_LOGE(format, ...) printf("[LVGL_PORT_E] " format "\r\n", ##__VA_ARGS__)
 
 typedef struct {
@@ -22,7 +20,6 @@ typedef struct {
     bool btn_enter;
     int32_t diff;
 } lvgl_port_encoder_ctx_t;
-
 
 static void lvgl_port_encoder_read(lv_indev_t *indev_drv, lv_indev_data_t *data);
 
