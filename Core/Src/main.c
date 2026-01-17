@@ -24,6 +24,7 @@
 #include "hrtim.h"
 #include "i2c.h"
 #include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -103,6 +104,7 @@ int main(void)
   MX_ADC3_Init();
   MX_ADC4_Init();
   MX_USART3_UART_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
