@@ -8,7 +8,7 @@
 #include "string.h"
 #include "hrtim.h"
 #include "lvgl.h"
-#include "lv_port_disp_template.h"
+#include "lv_port_disp.h"
 
 extern TaskHandle_t adc_task_handle;
 

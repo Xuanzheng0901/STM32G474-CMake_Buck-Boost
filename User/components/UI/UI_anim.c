@@ -1,5 +1,5 @@
 #include "lvgl.h"
-#include "../stm_lvgl_port/lv_port_disp_template.h"
+#include "lv_port_disp.h"
 
 extern lv_group_t *group;
 extern lv_obj_t *voltage_spinbox;

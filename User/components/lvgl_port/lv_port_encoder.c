@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-#include "stm32_lvgl_port_knob.h"
+#include "lv_port_encoder.h"
 #include <stdio.h>
 
 #define LVGL_PORT_LOGE(format, ...) printf("[LVGL_PORT_E] " format "\r\n", ##__VA_ARGS__)

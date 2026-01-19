@@ -1,9 +1,9 @@
 #include <stdio.h>
 #include "lvgl.h"
-#include "lv_port_disp_template.h"
+#include "lv_port_disp.h"
 #include "FreeRTOS.h"
 #include "task.h"
-#include "stm32_lvgl_port_knob.h"
+#include "lv_port_encoder.h"
 #include "tim.h"
 #include "PID.h"
 
@@ -44,12 +44,11 @@ static void lvgl_event_cb(lv_event_t *evt)
 
 static void value_update_task(void *arg)
 {
-    float voltage = 0.0f, current = 0.0f;
     while(1)
     {
         vTaskDelay(100);
-        voltage = get_voltage_value(0) / 1000.0f;
-        current = get_voltage_value(1);
+        float voltage = get_voltage_value(0) / 1000.0f;
+        float current = get_voltage_value(1);
         snprintf(value_buf[0], 6, "%5.2f", voltage);
         snprintf(value_buf[1], 5, "%4.2f", current);
         snprintf(value_buf[2], 8, "%6.2fW", voltage * current);

@@ -8,15 +8,12 @@
 #define STM32_LVGL_PORT_KNOB_H
 
 #include "lvgl.h"
-#include "stm32_knob.h"
-#include "stm32_button.h"
+#include "lv_port_knob.h"
+#include "lv_port_button.h"
 
 #ifdef __cplusplus
 extern "C"
 {
-
-
-
 #endif
 
 // LVGL 旋钮和按键的配置
@@ -31,7 +28,7 @@ typedef struct {
 lv_indev_t *lvgl_port_add_encoder(const lvgl_port_encoder_cfg_t *encoder_cfg);
 
 // 移除编码器
-int lvgl_port_remove_encoder(lv_indev_t *encoder);
+int lvgl_port_remove_encoder(lv_indev_t * encoder);
 
 
 #ifdef __cplusplus

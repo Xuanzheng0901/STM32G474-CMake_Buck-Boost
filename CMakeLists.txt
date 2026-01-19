@@ -40,7 +40,7 @@ add_subdirectory(cmake/stm32cubemx)
 
 set(CONFIG_LV_BUILD_EXAMPLES OFF)
 set(CONFIG_LV_BUILD_DEMOS OFF)
-set(LV_BUILD_CONF_PATH User/components/stm_lvgl_port/lv_conf.h)
+set(LV_BUILD_CONF_PATH User/components/lvgl_port/lv_conf.h)
 add_subdirectory(lvgl)
 add_subdirectory(User/components)
 add_subdirectory(User/main)

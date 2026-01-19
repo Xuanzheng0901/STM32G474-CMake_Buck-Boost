@@ -2,7 +2,7 @@
 file(GLOB_RECURSE COMPONENT_SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/ADC/*.c
         ${CMAKE_CURRENT_LIST_DIR}/pid_ctrl/*.c
-        ${CMAKE_CURRENT_LIST_DIR}/stm_lvgl_port/*.c
+        ${CMAKE_CURRENT_LIST_DIR}/lvgl_port/*.c
         ${CMAKE_CURRENT_LIST_DIR}/stm_ssd1306/*.c
         ${CMAKE_CURRENT_LIST_DIR}/UI/*.c
 )

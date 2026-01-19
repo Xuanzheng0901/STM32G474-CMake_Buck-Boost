@@ -120,7 +120,7 @@
 //     printf("lvgl init done\n");
 // }
 
-#include "lv_port_disp_template.h"
+#include "lv_port_disp.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>

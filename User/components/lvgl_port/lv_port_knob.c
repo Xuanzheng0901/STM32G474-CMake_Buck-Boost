@@ -4,7 +4,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "timers.h"
-#include "stm32_knob.h"
+#include "lv_port_knob.h"
 #include <stdbool.h>
 
 #define CONFIG_KNOB_PERIOD_TIME_MS      (15)
