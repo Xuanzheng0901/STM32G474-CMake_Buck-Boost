@@ -1,47 +1,33 @@
 cmake_minimum_required(VERSION 3.22)
 
-#
-# This file is generated only once,
-# and is not re-generated if converter is called multiple times.
-#
-# User is free to modify the file as much as necessary
-#
+if (POLICY CMP0077)
+    cmake_policy(SET CMP0077 NEW)
+endif ()
 
-# Setup compiler settings
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
-
-
-# Define the build type
-if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Debug")
-endif ()
-
-# Set the project name
-set(CMAKE_PROJECT_NAME G474_1)
-
-# Enable compile command to ease indexing with e.g. clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
+set(CMAKE_BUILD_TYPE "Debug")
 
-# Core project settings
-project(${CMAKE_PROJECT_NAME})
-message("Build type: " ${CMAKE_BUILD_TYPE})
+add_compile_options(-Wall -Wextra)
 
-# Enable CMake support for ASM and C languages
-enable_language(C ASM)
+project(G474_1 C ASM)
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-# Create an executable object type
-add_executable(${CMAKE_PROJECT_NAME})
+add_executable(${PROJECT_NAME})
 
-# Add STM32CubeMX generated sources
+# --- STM32CubeMX ---
 add_subdirectory(cmake/stm32cubemx)
 
-
-set(CONFIG_LV_BUILD_EXAMPLES OFF)
-set(CONFIG_LV_BUILD_DEMOS OFF)
-set(LV_BUILD_CONF_PATH User/components/lvgl_port/lv_conf.h)
+# --- LVGL Configuration ---
+set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "Disable examples" FORCE)
+set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "Disable demos" FORCE)
+set(LV_BUILD_CONF_PATH "${CMAKE_SOURCE_DIR}/User/components/lvgl_port/lv_conf.h" CACHE PATH "Path to lv_conf.h" FORCE)
 add_subdirectory(lvgl)
+target_link_libraries(lvgl PRIVATE stm32cubemx) # LVGL 需要依赖 STM32 的库 (FreeRTOS, HAL等)
+
+# --- User Modules ---
 add_subdirectory(User/components)
 add_subdirectory(User/main)
 
@@ -52,13 +38,6 @@ target_link_libraries(${PROJECT_NAME}
         user_main
 )
 
-target_include_directories(lvgl PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/Middlewares/Third_Party/FreeRTOS/Source/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2
-        ${CMAKE_CURRENT_SOURCE_DIR}/Core/Inc
-        ${CMAKE_CURRENT_SOURCE_DIR}/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F
-)
+target_link_options(${PROJECT_NAME} PRIVATE -u _printf_float)
 
-target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
-        -u _printf_float
-)
+list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
