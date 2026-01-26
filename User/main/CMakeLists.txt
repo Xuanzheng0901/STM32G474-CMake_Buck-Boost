@@ -1,4 +1,5 @@
 file(GLOB_RECURSE MAIN_SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/*.c
 )
-set(MAIN_SOURCES ${MAIN_SOURCES} PARENT_SCOPE)
+add_library(user_main INTERFACE)
+target_sources(user_main INTERFACE ${MAIN_SOURCES})
