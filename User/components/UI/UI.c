@@ -30,7 +30,7 @@ static lv_style_t style_spinbox_cursor;
 static lv_style_t style_spinbox_cursor_edited;
 
 static char value_buf[2][3][32] = {{"10.00", "1.00", "10.00"}, {"15.00", "2.00", "30.00"}};
-static const char *status_buf[][] = {
+static const char *status_buf[][4] = {
     {"-", "预充电", "可调恒流", "恒压"},
     {"反向充电", "正向放电"}
 };
@@ -280,7 +280,7 @@ static void home_page_init(void)
         lv_obj_align(power_value_label2, LV_ALIGN_TOP_LEFT, 96, 48);
 
         status_label = lv_label_create(lv_screen_active());
-        lv_label_set_text_static(status_label, status_buf[0]);
+        lv_label_set_text_static(status_label, status_buf[0][0]);
         lv_obj_set_width(status_label, 48);
         lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_align(status_label, LV_ALIGN_TOP_LEFT, 64, 96);
