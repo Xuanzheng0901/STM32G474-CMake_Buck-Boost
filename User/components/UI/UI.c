@@ -9,12 +9,6 @@
 
 LV_FONT_DECLARE(chillbit);
 
-extern lv_obj_t *highlight_frame;
-extern lv_anim_t focus_anim;
-
-extern void focus_event_cb(lv_event_t *e);
-
-// static lv_display_t *disp = NULL;
 static lv_indev_t *indev = NULL;
 lv_group_t *group = NULL;
 
@@ -22,7 +16,7 @@ static lv_obj_t *voltage_label = NULL;
 static lv_obj_t *current_label = NULL;
 static lv_obj_t *power_value_label = NULL;
 lv_obj_t *voltage_spinbox = NULL;
-lv_obj_t *current_spinbox = NULL;
+lv_obj_t *current_spinbox1 = NULL;
 
 static char value_buf[3][32] = {"0.00", "0.00", "00.00W"};
 
@@ -36,7 +30,7 @@ static void lvgl_event_cb(lv_event_t *evt)
         // snprintf(value_buf[0], 32, "%ld", value);
         // lv_obj_invalidate(voltage_label);
     }
-    else if(lv_event_get_current_target(evt) == current_spinbox)
+    else if(lv_event_get_current_target(evt) == current_spinbox1)
     {
         pid_set_current_limit(value * 10);
         // snprintf(value_buf[1], 32, "%ld", value);
@@ -152,9 +146,17 @@ static void home_page_init(void)
         lv_obj_set_content_height(voltage_spinbox, 12);
 
         lv_obj_set_style_pad_all(voltage_spinbox, -1, 0);
-        lv_obj_set_style_border_width(voltage_spinbox, 0, 0);
+        lv_obj_set_style_border_width(voltage_spinbox, 1, 0);
+        lv_obj_set_style_border_side(voltage_spinbox, LV_BORDER_SIDE_BOTTOM, 0);
+        lv_obj_set_style_border_opa(voltage_spinbox, 0, 0);
+        lv_obj_set_style_radius(voltage_spinbox, 0, 0);
 
-        lv_obj_set_size(voltage_spinbox, 32, 10);
+        // 聚焦时显示下划线
+        lv_obj_set_style_border_opa(voltage_spinbox, LV_OPA_COVER, LV_STATE_FOCUS_KEY);
+        lv_obj_set_style_border_width(voltage_spinbox, 1, LV_STATE_FOCUS_KEY);
+        lv_obj_set_style_border_color(voltage_spinbox, lv_color_black(), LV_STATE_FOCUS_KEY);
+
+        lv_obj_set_size(voltage_spinbox, 32, 12);
 
         lv_obj_set_style_outline_opa(voltage_spinbox, 0, LV_STATE_FOCUS_KEY);
         lv_obj_set_style_outline_opa(voltage_spinbox, 0, LV_STATE_EDITED);
@@ -174,55 +176,40 @@ static void home_page_init(void)
 
 
         //电流调整框
-        current_spinbox = lv_spinbox_create(lv_screen_active());
-        lv_spinbox_set_range(current_spinbox, 0, 600);
-        lv_spinbox_set_digit_format(current_spinbox, 3, 1);
-        lv_spinbox_set_step(current_spinbox, 1);
-        lv_spinbox_set_value(current_spinbox, 100);
+        current_spinbox1 = lv_spinbox_create(lv_screen_active());
+        lv_spinbox_set_range(current_spinbox1, 0, 600);
+        lv_spinbox_set_digit_format(current_spinbox1, 3, 1);
+        lv_spinbox_set_step(current_spinbox1, 1);
+        lv_spinbox_set_value(current_spinbox1, 100);
 
-        lv_obj_set_content_height(current_spinbox, 12);
+        lv_obj_set_content_height(current_spinbox1, 12);
 
-        lv_obj_set_style_pad_all(current_spinbox, -1, 0);
-        lv_obj_set_style_border_width(current_spinbox, 0, 0);
+        lv_obj_set_style_pad_all(current_spinbox1, -1, 0);
+        lv_obj_set_style_border_width(current_spinbox1, 1, 0);
+        lv_obj_set_style_border_side(current_spinbox1, LV_BORDER_SIDE_BOTTOM, 0);
+        lv_obj_set_style_border_opa(current_spinbox1, 0, 0);
+        lv_obj_set_style_radius(current_spinbox1, 0, 0);
 
-        lv_obj_set_size(current_spinbox, 26, 10);
+        // 聚焦时显示下划线
+        lv_obj_set_style_border_opa(current_spinbox1, LV_OPA_COVER, LV_STATE_FOCUS_KEY);
+        lv_obj_set_style_border_width(current_spinbox1, 1, LV_STATE_FOCUS_KEY);
+        lv_obj_set_style_border_color(current_spinbox1, lv_color_black(), LV_STATE_FOCUS_KEY);
 
-        lv_obj_set_style_outline_opa(current_spinbox, 0, LV_STATE_FOCUS_KEY);
-        lv_obj_set_style_outline_opa(current_spinbox, 0, LV_STATE_EDITED);
+        lv_obj_set_size(current_spinbox1, 26, 12);
 
-        lv_obj_set_style_bg_color(current_spinbox, lv_color_black(), LV_PART_CURSOR | LV_STATE_EDITED);
-        lv_obj_set_style_text_color(current_spinbox, lv_color_white(), LV_PART_CURSOR | LV_STATE_EDITED);
-        lv_obj_set_style_bg_color(current_spinbox, lv_color_white(), LV_PART_CURSOR);
-        lv_obj_set_style_text_color(current_spinbox, lv_color_black(), LV_PART_CURSOR);
+        lv_obj_set_style_outline_opa(current_spinbox1, 0, LV_STATE_FOCUS_KEY);
+        lv_obj_set_style_outline_opa(current_spinbox1, 0, LV_STATE_EDITED);
 
-        lv_obj_set_style_text_align(current_spinbox, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_bg_color(current_spinbox1, lv_color_black(), LV_PART_CURSOR | LV_STATE_EDITED);
+        lv_obj_set_style_text_color(current_spinbox1, lv_color_white(), LV_PART_CURSOR | LV_STATE_EDITED);
+        lv_obj_set_style_bg_color(current_spinbox1, lv_color_white(), LV_PART_CURSOR);
+        lv_obj_set_style_text_color(current_spinbox1, lv_color_black(), LV_PART_CURSOR);
 
-        lv_obj_align(current_spinbox, LV_ALIGN_TOP_RIGHT, -9, 18);
-        lv_group_add_obj(group, current_spinbox);
-        lv_obj_add_event_cb(current_spinbox, lvgl_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+        lv_obj_set_style_text_align(current_spinbox1, LV_TEXT_ALIGN_CENTER, 0);
 
-        // 创建焦点高亮框
-        highlight_frame = lv_obj_create(lv_screen_active());
-        lv_obj_set_size(highlight_frame, 35, 14);
-        lv_obj_align(highlight_frame, LV_ALIGN_TOP_LEFT, 34, 16);
-
-        // 设置高亮框样式
-        lv_obj_set_style_bg_opa(highlight_frame, LV_OPA_TRANSP, 0); // 背景透明，不遮挡内容
-        lv_obj_set_style_border_width(highlight_frame, 1, 0);
-        lv_obj_set_style_border_color(highlight_frame, lv_color_black(), 0); // 黑色边框，适合白色背景
-        lv_obj_set_style_border_opa(highlight_frame, LV_OPA_80, 0);
-        lv_obj_set_style_radius(highlight_frame, 4, 0); // 增加圆角
-        lv_obj_set_style_pad_all(highlight_frame, 0, 0);
-
-        // 设置高亮框不可点击，避免干扰交互，并移到后层避免遮挡
-        lv_obj_add_flag(highlight_frame, LV_OBJ_FLAG_FLOATING);
-        lv_obj_clear_flag(highlight_frame, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_move_to_index(highlight_frame, 0); // 移到最底层
-
-        // 为spinbox控件添加焦点事件
-        lv_obj_add_event_cb(voltage_spinbox, focus_event_cb, LV_EVENT_FOCUSED, NULL);
-        lv_obj_add_event_cb(current_spinbox, focus_event_cb, LV_EVENT_FOCUSED, NULL);
-
+        lv_obj_align(current_spinbox1, LV_ALIGN_TOP_RIGHT, -9, 18);
+        lv_group_add_obj(group, current_spinbox1);
+        lv_obj_add_event_cb(current_spinbox1, lvgl_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
         lv_obj_t *my_label = lv_label_create(lv_scr_act());
         lv_label_set_text(my_label, "电压电流");
