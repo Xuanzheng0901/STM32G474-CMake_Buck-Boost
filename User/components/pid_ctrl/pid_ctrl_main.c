@@ -12,7 +12,7 @@ static pid_ctrl_block_handle_t v_pid_handle = NULL;
 static pid_ctrl_block_handle_t i_pid_handle = NULL;
 QueueHandle_t pid_ctrl_queue_mV = NULL; //单位为mV
 QueueHandle_t pid_ctrl_queue_mA = NULL; //单位为mA (限流)
-static float now_current_A = 0.0f, now_voltage_mV = 0.0f;
+static float now_current_mA = 0.0f, now_voltage_mV = 0.0f;
 
 // --- 定义常量 ---
 #define PWM_PERIOD_ARR    PWM_Period
@@ -60,7 +60,7 @@ float get_voltage_value(uint8_t index)
     if(index == 0)
         return now_voltage_mV;
     if(index == 1)
-        return now_current_A;
+        return now_current_mA;
 
     return 0.0f;
 }
@@ -79,7 +79,7 @@ static inline void adc_data_process(uint32_t *data_buf)
     for(uint8_t i = 0; i < ADC_BUFFER_LENGTH / 2; i++)
     {
         origin_voltage_sum += data_buf[i] & 0x0FFF;
-        origin_current_sum += data_buf[i] >> 16;
+        origin_current_sum += 2254 - (int32_t)(data_buf[i] >> 16);
     }
     // origin_voltage_sum / 4095 * 3300 / 20(样本量) = adc引脚上的电压
     // * 20 = 运放输入电压(运放20分压)
@@ -90,8 +90,7 @@ static inline void adc_data_process(uint32_t *data_buf)
         temp_voltage_mV = 0.0f;
     }
 
-    float temp_current_A = origin_current_sum * 3000.0f / 4095.0f / (float)(ADC_BUFFER_LENGTH / 2) * 2.0f /
-                           1020.0f; //单位mA
+    float temp_current_mA = origin_current_sum * 3000.0f / 4095.0f / (float)(ADC_BUFFER_LENGTH / 2) * 2.0f;//单位mA
 
     //对均值进行卡尔曼滤波
     if(!is_kf_initialized)
@@ -100,13 +99,13 @@ static inline void adc_data_process(uint32_t *data_buf)
         // Q越大，跟踪越快，滤波效果越弱；Q越小，系统越稳定，但存在滞后
         // R越大，滤波效果越强，认为传感器噪声大；R越小，越相信传感器测量值
         kalman_1d_init(&kf_voltage, temp_voltage_mV, 10.0f, 0.5f, 50.0f); // 电压Q=0.5, R=50
-        kalman_1d_init(&kf_current, temp_current_A, 1.0f, 0.01f, 1.0f); // 电流Q=0.01, R=1.0
+        kalman_1d_init(&kf_current, temp_current_mA, 1.0f, 0.01f, 1.0f); // 电流Q=0.01, R=1.0
         is_kf_initialized = 1;
     }
 
     // 3. 执行滤波，覆盖全局变量
     now_voltage_mV = kalman_1d_update(&kf_voltage, temp_voltage_mV);
-    now_current_A = kalman_1d_update(&kf_current, temp_current_A);
+    now_current_mA = kalman_1d_update(&kf_current, temp_current_mA);
 }
 
 
@@ -147,7 +146,7 @@ static void PID_ctrl_routine(void *pvParameters)
 
             //4. 进行双环pid计算 (使用增量式PID并取最小值的方式实现CV/CC切换)
             float error_mV = (float)target_voltage_mV - now_voltage_mV;
-            float error_mA = (float)target_current_mA - now_current_A * 1000.0f;
+            float error_mA = (float)target_current_mA - now_current_mA;
 
             float v_pid_out = 0.0f;
             float i_pid_out = 0.0f;

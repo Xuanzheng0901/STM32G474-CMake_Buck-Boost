@@ -44,9 +44,9 @@ static void value_update_task(void *arg)
     {
         vTaskDelay(100);
         float voltage = get_voltage_value(0) / 1000.0f;
-        float current = get_voltage_value(1);
+        float current = get_voltage_value(1) / 1000.0f;
         snprintf(value_buf[0], 6, "%5.2f", voltage);
-        snprintf(value_buf[1], 5, "%4.2f", current);
+        snprintf(value_buf[1], 6, "%5.2f", current);
         snprintf(value_buf[2], 8, "%6.2fW", voltage * current);
 
         if(lvgl_port_lock(portMAX_DELAY))
@@ -119,9 +119,9 @@ static void home_page_init(void)
         //电流数值
         current_label = lv_label_create(lv_screen_active());
         lv_label_set_text_static(current_label, value_buf[1]);
-        lv_obj_set_width(current_label, 24);
-        lv_obj_set_style_text_align(current_label, LV_TEXT_ALIGN_LEFT, 0);
-        lv_obj_align(current_label, LV_ALIGN_TOP_LEFT, 94, 32);
+        lv_obj_set_width(current_label, 30);
+        lv_obj_set_style_text_align(current_label, LV_TEXT_ALIGN_RIGHT, 0);
+        lv_obj_align(current_label, LV_ALIGN_TOP_LEFT, 88, 32);
 
         lv_obj_t *power_label = lv_label_create(lv_screen_active());
         lv_label_set_text(power_label, "功率");
