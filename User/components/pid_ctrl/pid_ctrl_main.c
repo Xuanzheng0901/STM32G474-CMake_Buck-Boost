@@ -206,7 +206,7 @@ static void PID_ctrl_routine(void *pvParameters)
     static float output = 0.0f;
 
     static uint32_t *buf_ptr;
-
+    set_mod_ratio_by_factor(0.95f);
     while(1)
     {
         //1. 等待ADC数据
@@ -225,12 +225,12 @@ static void PID_ctrl_routine(void *pvParameters)
             adc_data_process(buf_ptr);
             //
             //4. 进行pid计算
-            float error_mV = (float)target_voltage_mV - now_voltage_mV;
-
-            pid_compute(pid_handle, error_mV, &output);
-            if(output < 0.01f)
-                output = 0.0f;
-            set_mod_ratio_by_factor(output);
+            // float error_mV = (float)target_voltage_mV - now_voltage_mV;
+            //
+            // pid_compute(pid_handle, error_mV, &output);
+            // if(output < 0.01f)
+            //     output = 0.0f;
+            // set_mod_ratio_by_factor(output);
             // LOGI("PID", "output: %.6f", output);
             HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_1);
         }
