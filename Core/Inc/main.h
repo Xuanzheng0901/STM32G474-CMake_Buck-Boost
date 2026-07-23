@@ -47,7 +47,7 @@ extern "C" {
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-#define ADC_BUFFER_LENGTH 40  // pid调控频率为PWM频率(20kHz) / ADC触发器分频(20) / ADC缓冲区的一半(20) = 50Hz
+#define ADC_BUFFER_LENGTH 2  // pid调控频率为PWM频率(30kHz) / ADC触发器分频(1) / ADC缓冲区的一半(1) = 30kHz
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
