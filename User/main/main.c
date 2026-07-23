@@ -44,5 +44,5 @@ void app_main(void)
     HAL_HRTIM_WaveformOutputStart(&hhrtim1,HRTIM_OUTPUT_TB1 | HRTIM_OUTPUT_TB2);
 
     HAL_HRTIM_WaveformCountStart(&hhrtim1, HRTIM_TIMERID_MASTER);
-    HAL_HRTIM_SimpleBaseStart_IT(&hhrtim1, HRTIM_TIMERINDEX_MASTER);
+    HAL_HRTIM_SimpleBaseStart(&hhrtim1, HRTIM_TIMERINDEX_MASTER);
 }
