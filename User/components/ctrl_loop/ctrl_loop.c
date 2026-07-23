@@ -40,36 +40,38 @@ static float32_t i_amplitude;          /**< 电流参考幅值 (电压环输出)
 static float32_t duty_current;         /**< 当前占空比 (用于调试) */
 static float32_t vref_ramp;            /**< 电压环参考斜坡 (运行时变量) */
 static float32_t vout_target;          /**< 目标输出电压 (可通过 API 运行时修改) */
-static uint32_t  soft_start_ticks;     /**< 软启动已进行节拍数 */
-static uint8_t   prev_polarity;        /**< 上一拍极性 (减少重复 HRTIM 写入) */
+static uint32_t soft_start_ticks;     /**< 软启动已进行节拍数 */
+static uint8_t prev_polarity;        /**< 上一拍极性 (减少重复 HRTIM 写入) */
 
 /* 直流测量值 (由 dc_data_process 更新, 供 UI 读取和 ISR 使用) */
-static float now_vout_V  = 0.0f;       /**< DC 输出电压 (V) */
-static float now_iout_A  = 0.0f;       /**< DC 输出电流 (A) */
+static float now_vout_V = 0.0f;       /**< DC 输出电压 (V) */
+static float now_iout_A = 0.0f;       /**< DC 输出电流 (A) */
 
 /* ==================== 前向声明 ==================== */
 
 static void dc_data_process(uint32_t *data_buf);
+
 static void ctrl_loop_routine(void *pvParameters);
 
-/* ==================== HRTIM 回调 (调试用) ==================== */
-
-void HAL_HRTIM_RepetitionEventCallback(HRTIM_HandleTypeDef *hhrtim, uint32_t TimerIdx)
-{
-    if(TimerIdx != HRTIM_TIMERINDEX_MASTER)
-        return;
-
-    GPIOC->ODR ^= GPIO_PIN_1;
-    GPIOC->ODR ^= GPIO_PIN_1;
-}
+//
+// /* ==================== HRTIM 回调 (调试用) ==================== */
+//
+// void HAL_HRTIM_RepetitionEventCallback(HRTIM_HandleTypeDef *hhrtim, uint32_t TimerIdx)
+// {
+//     if(TimerIdx != HRTIM_TIMERINDEX_MASTER)
+//         return;
+//
+//     GPIOC->ODR ^= GPIO_PIN_1;
+//     GPIOC->ODR ^= GPIO_PIN_1;
+// }
 
 /* ==================== AC 采样处理 (30kHz ISR 上下文) ==================== */
 
 void ctrl_loop_ac_isr(uint32_t adc_word)
 {
     /* 提取 ADC1 电压 (低 12bit) 和 ADC2 电流 (高 16bit) */
-    int32_t  v_raw = (int32_t)(adc_word & 0x0FFF);
-    int32_t  i_raw = (int32_t)(adc_word >> 16);
+    int32_t v_raw = (int32_t)(adc_word & 0x0FFF);
+    int32_t i_raw = (int32_t)(adc_word >> 16);
 
     /* 归一化 */
     float32_t v_inst = (float32_t)(v_raw - 2048) / 1365.33f;
@@ -78,13 +80,13 @@ void ctrl_loop_ac_isr(uint32_t adc_word)
     /* SOGI-PLL: 更新电网相位 */
     SPLL_1PH_SOGI_run(&spll, v_inst);
 
-    /* 极性 + |sinθ| */
-    uint8_t   polarity = (spll.sine >= 0.0f) ? 0 : 1;
-    float32_t abs_sin  = (spll.sine >= 0.0f) ? spll.sine : -spll.sine;
+    /* cosine 与电网同相 → 电流参考跟踪 |cosθ| */
+    uint8_t   polarity = (spll.cosine >= 0.0f) ? 0 : 1;
+    float32_t abs_cos  = (spll.cosine >= 0.0f) ? spll.cosine : -spll.cosine;
 
     /* PFC 电流内环 */
     ctrl_loop_current_isr(v_inst, i_inst, now_vout_V,
-                          abs_sin, polarity);
+                          abs_cos, polarity);
 }
 
 /* ==================== DC 数据处理 (任务上下文, ~150Hz) ==================== */
@@ -94,7 +96,8 @@ static void dc_data_process(uint32_t *data_buf)
     uint16_t len = ADC_BUFFER_LENGTH / 2;
     uint32_t v_sum = 0, i_sum = 0;
 
-    for (uint16_t j = 0; j < len; j++) {
+    for(uint16_t j = 0; j < len; j++)
+    {
         v_sum += (data_buf[j] & 0x0FFF);        /* ADC3: DC 电压 */
         i_sum += (data_buf[j] >> 16);            /* ADC4: DC 电流 */
     }
@@ -142,9 +145,9 @@ void ctrl_loop_init(void)
             .kp           = PFC_I_KP_DEFAULT,
             .ki           = i_ki,
             .kd           = 0.0f,
-            .max_output   =  PFC_I_OUTPUT_MAX,
+            .max_output   = PFC_I_OUTPUT_MAX,
             .min_output   = -PFC_I_OUTPUT_MAX,
-            .max_integral =  PFC_I_INTEGRAL_MAX,
+            .max_integral = PFC_I_INTEGRAL_MAX,
             .min_integral = -PFC_I_INTEGRAL_MAX,
             .cal_type     = PID_CAL_TYPE_INCREMENTAL,
         }
@@ -170,15 +173,15 @@ void ctrl_loop_init(void)
     pid_new_control_block(&v_cfg, &v_pid);
 
     /* 软启动 */
-    state             = CTRL_STATE_SOFT_START;
-    vout_target       = PFC_NOMINAL_VOUT;
-    vref_ramp         = 0.0f;
-    soft_start_ticks  = 0;
-    i_amplitude       = 0.0f;
-    duty_current      = 0.0f;
-    prev_polarity     = 0;
-    now_vout_V        = 0.0f;
-    now_iout_A        = 0.0f;
+    state = CTRL_STATE_SOFT_START;
+    vout_target = PFC_NOMINAL_VOUT;
+    vref_ramp = 0.0f;
+    soft_start_ticks = 0;
+    i_amplitude = 0.0f;
+    duty_current = 0.0f;
+    prev_polarity = 0;
+    now_vout_V = 0.0f;
+    now_iout_A = 0.0f;
 
     /* Timer B 安全态: 全关 */
     hhrtim1.Instance->sTimerxRegs[HRTIM_TIMERINDEX_TIMER_B].CMP1xR = 0;
@@ -197,14 +200,15 @@ CtrlLoop_State ctrl_loop_get_state(void)
 
 void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
                            float32_t vout,
-                           float32_t abs_sin, uint8_t polarity)
+                           float32_t abs_cos, uint8_t polarity)
 {
-    if (polarity != prev_polarity) {
+    if(polarity != prev_polarity)
+    {
         pfc_set_polarity(polarity);
         prev_polarity = polarity;
     }
 
-    float i_ref   = pfc_gen_i_ref(i_amplitude, abs_sin);
+    float i_ref = pfc_gen_i_ref(i_amplitude, abs_cos);
     float i_error = i_ref - il_inst;
     float i_correction;
     pid_compute(i_pid, i_error, &i_correction);
@@ -219,17 +223,20 @@ void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
 
 void ctrl_loop_voltage_task(float32_t vout_measured)
 {
-    if (state == CTRL_STATE_IDLE || state == CTRL_STATE_FAULT) {
+    if(state == CTRL_STATE_IDLE || state == CTRL_STATE_FAULT)
+    {
         i_amplitude = 0.0f;
         return;
     }
 
-    if (state == CTRL_STATE_SOFT_START) {
+    if(state == CTRL_STATE_SOFT_START)
+    {
         soft_start_ticks++;
         vref_ramp = vout_target *
                     ((float32_t)soft_start_ticks / (float32_t)PFC_SOFTSTART_STEPS);
 
-        if (soft_start_ticks >= PFC_SOFTSTART_STEPS) {
+        if(soft_start_ticks >= PFC_SOFTSTART_STEPS)
+        {
             vref_ramp = vout_target;
             state = CTRL_STATE_RUNNING;
         }
@@ -245,10 +252,12 @@ void ctrl_loop_voltage_task(float32_t vout_measured)
 
 void ctrl_loop_set_vout(float32_t vout)
 {
-    if (vout < 1.0f) vout = 1.0f;
+    if(vout < 1.0f)
+        vout = 1.0f;
     vout_target = vout;
 
-    if (state == CTRL_STATE_RUNNING) {
+    if(state == CTRL_STATE_RUNNING)
+    {
         state = CTRL_STATE_SOFT_START;
         soft_start_ticks = (uint32_t)(vref_ramp / vout_target * PFC_SOFTSTART_STEPS);
     }
@@ -271,7 +280,22 @@ float32_t ctrl_loop_get_vref(void)
     return vref_ramp;
 }
 
-float32_t ctrl_loop_get_voltage(void)     { return now_vout_V; }
-float32_t ctrl_loop_get_current(void)     { return now_iout_A; }
-float32_t ctrl_loop_get_vout_cached(void) { return now_vout_V; }
-void ctrl_loop_set_vout_cache(float32_t vout) { now_vout_V = vout; }
+float32_t ctrl_loop_get_voltage(void)
+{
+    return now_vout_V;
+}
+
+float32_t ctrl_loop_get_current(void)
+{
+    return now_iout_A;
+}
+
+float32_t ctrl_loop_get_vout_cached(void)
+{
+    return now_vout_V;
+}
+
+void ctrl_loop_set_vout_cache(float32_t vout)
+{
+    now_vout_V = vout;
+}

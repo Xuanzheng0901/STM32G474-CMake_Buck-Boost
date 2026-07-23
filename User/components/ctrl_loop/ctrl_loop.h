@@ -49,12 +49,12 @@ void ctrl_loop_ac_isr(uint32_t adc_word);
  * @param  vin_inst : 输入电压瞬时值 (归一化)
  * @param  il_inst  : 电感电流瞬时值 (归一化)
  * @param  vout     : 输出电压 (归一化, 来自慢速 ADC 或滤波值)
- * @param  abs_sin  : |sinθ|, 来自 SOGI-PLL
- * @param  polarity : 电网极性, 0=正半周, 1=负半周 (sinθ > 0 ? 0 : 1)
+ * @param  abs_cos  : |cosθ|, SOGI 输出 (cos 与电网同相)
+ * @param  polarity : 电网极性, 0=正半周, 1=负半周 (cosθ > 0 ? 0 : 1)
  */
 void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
                            float32_t vout,
-                           float32_t abs_sin, uint8_t polarity);
+                           float32_t abs_cos, uint8_t polarity);
 
 /**
  * @brief  电压外环 (FreeRTOS 任务中周期调用, ~300Hz)
