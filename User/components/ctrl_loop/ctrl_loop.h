@@ -67,8 +67,30 @@ float32_t ctrl_loop_get_i_amplitude(void);
 float32_t ctrl_loop_get_duty(void);
 
 /**
- * @brief  获取软启动当前目标电压 (用于显示)
+ * @brief  设置目标输出电压
+ * @param  vout : 目标电压 (V)
+ * @note   可在运行时调用, 内部自动触发斜坡过渡
+ */
+void ctrl_loop_set_vout(float32_t vout);
+
+/**
+ * @brief  获取当前目标电压 (斜坡值, 用于显示)
  */
 float32_t ctrl_loop_get_vref(void);
+
+/**
+ * @brief  获取滤波后的输出电压 (V), 供 UI 显示
+ */
+float32_t ctrl_loop_get_voltage(void);
+
+/**
+ * @brief  获取滤波后的输出电流 (A), 供 UI 显示
+ */
+float32_t ctrl_loop_get_current(void);
+
+/**
+ * @brief  获取 Vout 缓存值 (V), 供 ADC ISR 中电流环使用
+ */
+float32_t ctrl_loop_get_vout_cached(void);
 
 #endif /* __CTRL_LOOP_H__ */

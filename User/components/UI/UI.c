@@ -5,7 +5,7 @@
 #include "task.h"
 #include "lv_port_encoder.h"
 #include "tim.h"
-#include "PID.h"
+#include "ctrl_loop.h"
 
 LV_FONT_DECLARE(chillbit);
 
@@ -32,7 +32,7 @@ static void lvgl_event_cb(lv_event_t *evt)
     // // ESP_LOGI(TAG, "Value changed: %ld", value);
     if(lv_event_get_current_target(evt) == voltage_spinbox)
     {
-        pid_set_voltage(value * 10);
+        ctrl_loop_set_vout(value * 0.01f);
         // snprintf(value_buf[0], 32, "%ld", value);
         // lv_obj_invalidate(voltage_label);
     }
@@ -49,8 +49,8 @@ static void value_update_task(void *arg)
     while(1)
     {
         vTaskDelay(100);
-        float voltage = get_voltage_value(0) / 1000.0f;
-        float current = get_voltage_value(1);
+        float voltage = ctrl_loop_get_voltage();
+        float current = ctrl_loop_get_current();
         snprintf(value_buf[0], 6, "%5.2f", voltage);
         snprintf(value_buf[1], 5, "%4.2f", current);
         snprintf(value_buf[2], 8, "%6.2fW", voltage * current);

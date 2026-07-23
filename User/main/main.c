@@ -35,7 +35,6 @@ void app_main(void)
     // printf("helloworld\n");
     xTaskCreate(LED_task0, "LED", 256, NULL, 10, NULL);
     ui_init();
-    pid_ctrl_init();
     SOGI_init();
     ctrl_loop_init();
     ADC_init();

@@ -16,10 +16,6 @@ TaskHandle_t adc_task_handle = NULL;
 QueueHandle_t adc_queue = NULL;
 float adc_result[2];
 
-/* 缓存的输出电压 (由电压环任务更新) */
-static float32_t vout_cached = 0.0f;
-void adc_set_vout_cache(float32_t vout) { vout_cached = vout; }
-
 /* 内部: 处理单个 ADC 采样点 */
 static inline void adc_process_sample(uint32_t adc_word)
 {
@@ -38,8 +34,9 @@ static inline void adc_process_sample(uint32_t adc_word)
     uint8_t polarity = (spll.sine >= 0.0f) ? 0 : 1;
     float32_t abs_sin = (spll.sine >= 0.0f) ? spll.sine : -spll.sine;
 
-    /* PFC 电流内环 */
-    ctrl_loop_current_isr(v_inst, i_inst, vout_cached, abs_sin, polarity);
+    /* PFC 电流内环 (Vout 缓存由 ctrl_loop 任务维护) */
+    ctrl_loop_current_isr(v_inst, i_inst, ctrl_loop_get_vout_cached(),
+                          abs_sin, polarity);
 }
 
 void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)

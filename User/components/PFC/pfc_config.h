@@ -9,9 +9,10 @@
 #define __PFC_CONFIG_H__
 
 #include "arm_math.h"
+#include "main.h"
 
 /* ==================== PWM 参数 ==================== */
-#define PFC_PWM_PERIOD          44800U       /**< HRTIM 周期 (168MHz*8/44800 = 30kHz) */
+#define PFC_PWM_PERIOD          PWM_Period       /**< HRTIM 周期 (168MHz*8/44800 = 30kHz) */
 #define PFC_PWM_FREQ            30000.0f     /**< PWM 开关频率 (Hz) */
 #define PFC_DUTY_MIN            0.02f        /**< 最小占空比 (防止脉冲丢失) */
 #define PFC_DUTY_MAX            0.95f        /**< 最大占空比 (留死区余量) */
