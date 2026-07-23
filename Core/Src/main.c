@@ -20,9 +20,11 @@
 #include "main.h"
 #include "cmsis_os.h"
 #include "adc.h"
+#include "dac.h"
 #include "dma.h"
 #include "hrtim.h"
 #include "i2c.h"
+#include "opamp.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
@@ -107,6 +109,8 @@ int main(void)
   MX_TIM2_Init();
   MX_ADC5_Init();
   MX_SPI3_Init();
+  MX_DAC3_Init();
+  MX_OPAMP1_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */

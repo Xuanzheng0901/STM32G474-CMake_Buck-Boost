@@ -4,12 +4,14 @@
 
 #include <math.h>
 
+#include "dac.h"
 #include "task.h"
 #include "stdio_ext.h"
 #include "string.h"
 #include "hrtim.h"
 #include "lvgl.h"
 #include "lv_port_disp.h"
+#include "sogi.h"
 #include "spi.h"
 
 extern TaskHandle_t adc_task_handle;
@@ -33,6 +35,7 @@ void app_main(void)
     xTaskCreate(LED_task0, "LED", 256, NULL, 10, NULL);
     ui_init();
     pid_ctrl_init();
+    SOGI_init();
     ADC_init();
 
     HAL_HRTIM_WaveformCountStart(
