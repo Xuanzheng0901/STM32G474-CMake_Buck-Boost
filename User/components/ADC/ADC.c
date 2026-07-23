@@ -7,16 +7,40 @@
 #include "queue.h"
 #include "sogi.h"
 #include "task.h"
+#include "ctrl_loop.h"
 
 extern SPLL_1PH_SOGI spll;
 
-static uint32_t adc_buffer_origin[ADC_BUFFER_LENGTH];
-// static const uint32_t *current_buffer = NULL;
+static uint32_t adc_buffer_origin[2];
 TaskHandle_t adc_task_handle = NULL;
 QueueHandle_t adc_queue = NULL;
 float adc_result[2];
 
-uint8_t count = 0;
+/* 缓存的输出电压 (由电压环任务更新) */
+static float32_t vout_cached = 0.0f;
+void adc_set_vout_cache(float32_t vout) { vout_cached = vout; }
+
+/* 内部: 处理单个 ADC 采样点 */
+static inline void adc_process_sample(uint32_t adc_word)
+{
+    /* 提取 ADC1 电压 (低 12bit) 和 ADC2 电流 (高 16bit) */
+    int32_t  v_raw   = (int32_t)(adc_word & 0x0FFF);
+    int32_t  i_raw   = (int32_t)(adc_word >> 16);
+
+    /* 归一化: (raw - offset) / scale */
+    float32_t v_inst = (float32_t)(v_raw - 2048) / 1365.33f;
+    float32_t i_inst = (float32_t)(i_raw - 2048) / 1365.33f;
+
+    /* SOGI-PLL: 更新电网相位 */
+    SPLL_1PH_SOGI_run(&spll, v_inst);
+
+    /* 极性: sinθ > 0 → 正半周 (极性=0), sinθ < 0 → 负半周 (极性=1) */
+    uint8_t polarity = (spll.sine >= 0.0f) ? 0 : 1;
+    float32_t abs_sin = (spll.sine >= 0.0f) ? spll.sine : -spll.sine;
+
+    /* PFC 电流内环 */
+    ctrl_loop_current_isr(v_inst, i_inst, vout_cached, abs_sin, polarity);
+}
 
 void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)
 {
@@ -37,33 +61,14 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 void ADC1_half_cplt_isr(ADC_HandleTypeDef *hadc)
 {
     GPIOC->ODR ^= GPIO_PIN_1;
-    float32_t vNorm = (float32_t)(((int32_t)(adc_buffer_origin[0] & 0x0FFF)) - 2048) / 1365.33f;
-    SPLL_1PH_SOGI_run(&spll, vNorm);
-    // if(++count >= 2)
-    // {
-    HAL_DAC_SetValue(&hdac3,
-                     DAC_CHANNEL_1,
-                     DAC_ALIGN_12B_R,
-                     (spll.cosine + 1) * 2047);
-    //     count = 0;
-    // }
-
+    adc_process_sample(adc_buffer_origin[0]);
     GPIOC->ODR ^= GPIO_PIN_1;
 }
 
 void ADC1_cplt_isr(ADC_HandleTypeDef *hadc)
 {
     GPIOC->ODR ^= GPIO_PIN_1;
-    float32_t vNorm = (float32_t)(((int32_t)(adc_buffer_origin[1] & 0x0FFF)) - 2048) / 1365.33f;
-    SPLL_1PH_SOGI_run(&spll, vNorm);
-    // if(++count >= 2)
-    // {
-    HAL_DAC_SetValue(&hdac3,
-                     DAC_CHANNEL_1,
-                     DAC_ALIGN_12B_R,
-                     (spll.cosine + 1) * 2047);
-    count = 0;
-    // }
+    adc_process_sample(adc_buffer_origin[1]);
     GPIOC->ODR ^= GPIO_PIN_1;
 }
 

@@ -9,6 +9,8 @@ file(GLOB_RECURSE COMPONENT_SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/LOG/*.c
         ${CMAKE_CURRENT_LIST_DIR}/filter/*.c
         ${CMAKE_CURRENT_LIST_DIR}/PLL/*.c
+        ${CMAKE_CURRENT_LIST_DIR}/PFC/*.c
+        ${CMAKE_CURRENT_LIST_DIR}/ctrl_loop/*.c
 )
 
 add_library(user_components INTERFACE)
@@ -25,4 +27,6 @@ target_include_directories(user_components INTERFACE
         ${CMAKE_CURRENT_LIST_DIR}/LOG
         ${CMAKE_CURRENT_LIST_DIR}/filter
         ${CMAKE_CURRENT_LIST_DIR}/PLL/
+        ${CMAKE_CURRENT_LIST_DIR}/PFC/
+        ${CMAKE_CURRENT_LIST_DIR}/ctrl_loop/
 )

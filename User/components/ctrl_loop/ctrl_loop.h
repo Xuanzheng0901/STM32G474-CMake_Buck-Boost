@@ -1,0 +1,74 @@
+/**
+ * @file    ctrl_loop.h
+ * @brief   图腾柱 PFC 总控制回路 API
+ *
+ * @details 编排电流内环 (30kHz ISR) + 电压外环 (~300Hz 任务) + 软启动
+ *
+ * 使用方式:
+ *   1. ctrl_loop_init()           — 系统初始化时调用一次
+ *   2. ctrl_loop_current_isr()    — 每个 ADC 采样中断调用 (30kHz, 电流内环)
+ *   3. ctrl_loop_voltage_task()   — FreeRTOS 任务中周期调用 (电压外环)
+ */
+
+#ifndef __CTRL_LOOP_H__
+#define __CTRL_LOOP_H__
+
+#include "arm_math.h"
+
+/* ==================== 控制回路状态枚举 ==================== */
+
+typedef enum {
+    CTRL_STATE_IDLE = 0,        /**< 未启动 */
+    CTRL_STATE_SOFT_START,      /**< 软启动: Vref 逐步上升 */
+    CTRL_STATE_RUNNING,         /**< 正常运行 */
+    CTRL_STATE_FAULT            /**< 故障保护 */
+} CtrlLoop_State;
+
+/* ==================== 公开 API ==================== */
+
+/**
+ * @brief  初始化 PFC 控制回路
+ * @note   配置电流/电压 PI 参数, 进入软启动状态
+ */
+void ctrl_loop_init(void);
+
+/**
+ * @brief  获取当前控制状态
+ */
+CtrlLoop_State ctrl_loop_get_state(void);
+
+/**
+ * @brief  电流内环 ISR (每 ADC 采样调用一次, ~30kHz)
+ * @param  vin_inst : 输入电压瞬时值 (归一化)
+ * @param  il_inst  : 电感电流瞬时值 (归一化)
+ * @param  vout     : 输出电压 (归一化, 来自慢速 ADC 或滤波值)
+ * @param  abs_sin  : |sinθ|, 来自 SOGI-PLL
+ * @param  polarity : 电网极性, 0=正半周, 1=负半周 (sinθ > 0 ? 0 : 1)
+ */
+void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
+                           float32_t vout,
+                           float32_t abs_sin, uint8_t polarity);
+
+/**
+ * @brief  电压外环 (FreeRTOS 任务中周期调用, ~300Hz)
+ * @param  vout_measured : 当前测量的输出电压 (归一化)
+ * @note   内部自动处理: 软启动 Vref 斜坡 → 电压 PI → 更新电流参考幅值
+ */
+void ctrl_loop_voltage_task(float32_t vout_measured);
+
+/**
+ * @brief  获取当前电流参考幅值 (用于调试/显示)
+ */
+float32_t ctrl_loop_get_i_amplitude(void);
+
+/**
+ * @brief  获取当前工作占空比 (用于调试/显示)
+ */
+float32_t ctrl_loop_get_duty(void);
+
+/**
+ * @brief  获取软启动当前目标电压 (用于显示)
+ */
+float32_t ctrl_loop_get_vref(void);
+
+#endif /* __CTRL_LOOP_H__ */

@@ -4,6 +4,7 @@
 
 #include <math.h>
 
+#include "ctrl_loop.h"
 #include "dac.h"
 #include "task.h"
 #include "stdio_ext.h"
@@ -36,6 +37,7 @@ void app_main(void)
     ui_init();
     pid_ctrl_init();
     SOGI_init();
+    ctrl_loop_init();
     ADC_init();
 
     HAL_HRTIM_WaveformCountStart(

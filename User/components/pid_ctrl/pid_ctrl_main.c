@@ -7,6 +7,7 @@
 #include "queue.h"
 #include "kalman.h"
 #include "sogi.h"
+#include "ctrl_loop.h"
 
 extern QueueHandle_t adc_queue;
 
@@ -114,6 +115,11 @@ static void PID_ctrl_routine(void *pvParameters)
 
     static uint32_t *buf_ptr;
 
+    /* 电压外环分频计数器: 每 5 次 ADC 数据处理执行一次 (~300Hz) */
+    static uint32_t vloop_div = 0;
+
+    extern void adc_set_vout_cache(float vout);
+
     while(1)
     {
         //1. 等待ADC数据
@@ -126,19 +132,28 @@ static void PID_ctrl_routine(void *pvParameters)
                 if(target_voltage_mV != target_voltage_buffer_mV)
                 {
                     target_voltage_mV = target_voltage_buffer_mV;
-                    // pid_reset_ctrl_block(pid_handle); //使用增量式pid更改target后不能重置
                 }
             }
             adc_data_process(buf_ptr);
-            //
-            //4. 进行pid计算
+
+            /* ---- PFC 电压外环 (~300Hz) ---- */
+            vloop_div++;
+            if(vloop_div >= 5)
+            {
+                vloop_div = 0;
+                /* 转换 mV → V, 供电压环使用 */
+                float32_t vout_volts = now_voltage_mV / 1000.0f;
+                ctrl_loop_voltage_task(vout_volts);
+                /* 同步更新 ISR 中电流环使用的 Vout 缓存 */
+                adc_set_vout_cache(vout_volts);
+            }
+
+            //4. 进行pid计算 (PFC 电压环已替代此逻辑)
             // float error_mV = (float)target_voltage_mV - now_voltage_mV;
-            //
             // pid_compute(pid_handle, error_mV, &output);
             // if(output < 0.01f)
             //     output = 0.0f;
             // set_mod_ratio_by_factor(output);
-            // LOGI("PID", "output: %.6f", output);
             HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_1);
         }
     }
