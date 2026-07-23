@@ -38,7 +38,14 @@ void ctrl_loop_init(void);
 CtrlLoop_State ctrl_loop_get_state(void);
 
 /**
- * @brief  电流内环 ISR (每 ADC 采样调用一次, ~30kHz)
+ * @brief  AC 采样 ISR 入口 (由 ADC 回调调用, 30kHz)
+ * @param  adc_word : ADC12 双通道 32bit 字 (低12bit=电压, 高16bit=电流)
+ * @note   内部依次: 归一化 → SOGI-PLL → 电流内环
+ */
+void ctrl_loop_ac_isr(uint32_t adc_word);
+
+/**
+ * @brief  电流内环 (每 ADC 采样调用一次, ~30kHz)
  * @param  vin_inst : 输入电压瞬时值 (归一化)
  * @param  il_inst  : 电感电流瞬时值 (归一化)
  * @param  vout     : 输出电压 (归一化, 来自慢速 ADC 或滤波值)
@@ -92,5 +99,7 @@ float32_t ctrl_loop_get_current(void);
  * @brief  获取 Vout 缓存值 (V), 供 ADC ISR 中电流环使用
  */
 float32_t ctrl_loop_get_vout_cached(void);
+
+void ctrl_loop_set_vout_cache(float32_t vout);
 
 #endif /* __CTRL_LOOP_H__ */

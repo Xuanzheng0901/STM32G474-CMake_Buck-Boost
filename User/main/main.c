@@ -15,8 +15,6 @@
 #include "sogi.h"
 #include "spi.h"
 
-extern TaskHandle_t adc_task_handle;
-
 void LED_task0(void *arg)
 {
     LOGI("LED", "Task Running. Stack: %p", xTaskGetCurrentTaskHandle());
@@ -36,8 +34,8 @@ void app_main(void)
     xTaskCreate(LED_task0, "LED", 256, NULL, 10, NULL);
     ui_init();
     SOGI_init();
+    ADC_init();         /* 先创建 adc_queue, 再启动控制任务 */
     ctrl_loop_init();
-    ADC_init();
 
     HAL_HRTIM_WaveformCountStart(
         &hhrtim1,

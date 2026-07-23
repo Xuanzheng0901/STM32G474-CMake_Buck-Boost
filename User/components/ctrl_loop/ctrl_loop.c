@@ -16,19 +16,18 @@
 #include "ctrl_loop.h"
 #include "pfc_utils.h"
 #include "pfc_config.h"
+#include "sogi.h"
 
 #include "FreeRTOS.h"
 #include "hrtim.h"
-#include "kalman.h"
 #include "main.h"
 #include "queue.h"
 #include "task.h"
 
-#include <math.h>
-
 /* ==================== 外部引用 ==================== */
 
-extern QueueHandle_t adc_queue;
+extern SPLL_1PH_SOGI spll;
+extern QueueHandle_t dc_adc_queue;
 
 /* ==================== 内部状态 ==================== */
 
@@ -43,16 +42,13 @@ static float32_t vout_target;          /**< 目标输出电压 (可通过 API �
 static uint32_t  soft_start_ticks;     /**< 软启动已进行节拍数 */
 static uint8_t   prev_polarity;        /**< 上一拍极性 (减少重复 HRTIM 写入) */
 
-/* 测量值 (由 adc_data_process 更新, 供 UI 读取) */
-static float now_voltage_mV = 0.0f;    /**< 输出电压 (mV) */
-static float now_current_A  = 0.0f;    /**< 输出电流 (A) */
-
-/* ISR 使用的 Vout 缓存 */
-static float32_t vout_cached = 0.0f;
+/* 直流测量值 (由 dc_data_process 更新, 供 UI 读取和 ISR 使用) */
+static float now_vout_V  = 0.0f;       /**< DC 输出电压 (V) */
+static float now_iout_A  = 0.0f;       /**< DC 输出电流 (A) */
 
 /* ==================== 前向声明 ==================== */
 
-static void adc_data_process(uint32_t *data_buf);
+static void dc_data_process(uint32_t *data_buf);
 static void ctrl_loop_routine(void *pvParameters);
 
 /* ==================== HRTIM 回调 (调试用) ==================== */
@@ -66,83 +62,67 @@ void HAL_HRTIM_RepetitionEventCallback(HRTIM_HandleTypeDef *hhrtim, uint32_t Tim
     GPIOC->ODR ^= GPIO_PIN_1;
 }
 
-/* ==================== ADC 数据处理 (RMS + 卡尔曼) ==================== */
+/* ==================== AC 采样处理 (30kHz ISR 上下文) ==================== */
 
-/** @brief 电压 RMS 系数: ADC 方差 → mV */
-#define V_RMS_COEF (28.5f)
-/** @brief 电流 RMS 系数: ADC 方差 → A */
-#define I_RMS_COEF (0.007326007f)
-
-static void adc_data_process(uint32_t *data_buf)
+void ctrl_loop_ac_isr(uint32_t adc_word)
 {
-    static kalman_1d_state_t kf_voltage;
-    static kalman_1d_state_t kf_current;
-    static uint8_t is_kf_initialized = 0;
+    /* 提取 ADC1 电压 (低 12bit) 和 ADC2 电流 (高 16bit) */
+    int32_t  v_raw = (int32_t)(adc_word & 0x0FFF);
+    int32_t  i_raw = (int32_t)(adc_word >> 16);
 
-    uint32_t v_sum = 0, i_sum = 0;
-    uint64_t v_sq_sum = 0, i_sq_sum = 0;
+    /* 归一化 */
+    float32_t v_inst = (float32_t)(v_raw - 2048) / 1365.33f;
+    float32_t i_inst = (float32_t)(i_raw - 2048) / 1365.33f;
+
+    /* SOGI-PLL: 更新电网相位 */
+    SPLL_1PH_SOGI_run(&spll, v_inst);
+
+    /* 极性 + |sinθ| */
+    uint8_t   polarity = (spll.sine >= 0.0f) ? 0 : 1;
+    float32_t abs_sin  = (spll.sine >= 0.0f) ? spll.sine : -spll.sine;
+
+    /* PFC 电流内环 */
+    ctrl_loop_current_isr(v_inst, i_inst, now_vout_V,
+                          abs_sin, polarity);
+}
+
+/* ==================== DC 数据处理 (任务上下文, ~150Hz) ==================== */
+
+static void dc_data_process(uint32_t *data_buf)
+{
     uint16_t len = ADC_BUFFER_LENGTH / 2;
+    uint32_t v_sum = 0, i_sum = 0;
 
-    for(uint16_t i = 0; i < len; i++)
-    {
-        uint32_t v_raw = data_buf[i] & 0x0FFF;
-        uint32_t i_raw = data_buf[i] >> 16;
-
-        v_sum += v_raw;
-        i_sum += i_raw;
-        v_sq_sum += v_raw * v_raw;
-        i_sq_sum += i_raw * i_raw;
+    for (uint16_t j = 0; j < len; j++) {
+        v_sum += (data_buf[j] & 0x0FFF);        /* ADC3: DC 电压 */
+        i_sum += (data_buf[j] >> 16);            /* ADC4: DC 电流 */
     }
 
-    float f_len = (float)len;
+    float v_avg = (float)v_sum / (float)len;
+    float i_avg = (float)i_sum / (float)len;
 
-    float v_var = ((float)v_sq_sum - ((float)v_sum * v_sum) / f_len) / f_len;
-    float i_var = ((float)i_sq_sum - ((float)i_sum * i_sum) / f_len) / f_len;
+    /* 归一化并存储 (供 ISR 和 UI 使用) */
+    now_vout_V = (v_avg - 2048.0f) / 1365.33f;
+    now_iout_A = (i_avg - 2048.0f) / 1365.33f;
 
-    if(v_var < 0.0f) v_var = 0.0f;
-    if(i_var < 0.0f) i_var = 0.0f;
-
-    float raw_voltage_mV = sqrtf(v_var) * V_RMS_COEF;
-    float raw_current_A  = sqrtf(i_var) * I_RMS_COEF;
-
-    if(!is_kf_initialized)
-    {
-        kalman_1d_init(&kf_voltage, raw_voltage_mV, 10.0f, 0.5f, 50.0f);
-        kalman_1d_init(&kf_current, raw_current_A,   1.0f, 0.01f, 1.0f);
-        is_kf_initialized = 1;
-    }
-
-    now_voltage_mV = kalman_1d_update(&kf_voltage, raw_voltage_mV);
-    now_current_A  = kalman_1d_update(&kf_current,  raw_current_A);
+    /* 电压外环: Vref - Vout → 电流参考幅值 */
+    ctrl_loop_voltage_task(now_vout_V);
 }
 
 /* ==================== FreeRTOS 控制任务 ==================== */
 
 static void ctrl_loop_routine(void *pvParameters)
 {
-    static uint32_t target_voltage_buffer_mV = 0;
     static uint32_t *buf_ptr;
-
-    /* 电压外环分频计数器 (~300Hz = 每 5 次 ADC 数据处理) */
-    static uint32_t vloop_div = 0;
 
     while(1)
     {
-        if(xQueueReceive(adc_queue, &buf_ptr, portMAX_DELAY) == pdTRUE)
+        /* 等待 DC 数据 (ADC34, ~150Hz) */
+        if(xQueueReceive(dc_adc_queue, &buf_ptr, portMAX_DELAY) == pdTRUE)
         {
             HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_1);
 
-            adc_data_process(buf_ptr);
-
-            /* ---- PFC 电压外环 (~300Hz) ---- */
-            vloop_div++;
-            if(vloop_div >= 5)
-            {
-                vloop_div = 0;
-                float32_t vout_volts = now_voltage_mV / 1000.0f;
-                ctrl_loop_voltage_task(vout_volts);
-                vout_cached = vout_volts;
-            }
+            dc_data_process(buf_ptr);   /* Vout 平均 + 电压外环 */
 
             HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_1);
         }
@@ -178,9 +158,8 @@ void ctrl_loop_init(void)
     i_amplitude       = 0.0f;
     duty_current      = 0.0f;
     prev_polarity     = 0;
-    now_voltage_mV    = 0.0f;
-    now_current_A     = 0.0f;
-    vout_cached       = 0.0f;
+    now_vout_V        = 0.0f;
+    now_iout_A        = 0.0f;
 
     /* Timer B 安全态: 全关 */
     hhrtim1.Instance->sTimerxRegs[HRTIM_TIMERINDEX_TIMER_B].CMP1xR = 0;
@@ -270,6 +249,7 @@ float32_t ctrl_loop_get_vref(void)
     return vref_ramp;
 }
 
-float32_t ctrl_loop_get_voltage(void)     { return now_voltage_mV / 1000.0f; }
-float32_t ctrl_loop_get_current(void)     { return now_current_A; }
-float32_t ctrl_loop_get_vout_cached(void) { return vout_cached; }
+float32_t ctrl_loop_get_voltage(void)     { return now_vout_V; }
+float32_t ctrl_loop_get_current(void)     { return now_iout_A; }
+float32_t ctrl_loop_get_vout_cached(void) { return now_vout_V; }
+void ctrl_loop_set_vout_cache(float32_t vout) { now_vout_V = vout; }

@@ -1,73 +1,56 @@
-#include "stdio.h"
+/**
+ * @file    ADC.c
+ * @brief   ADC 硬件配置 + DMA 数据搬运, 所有控制逻辑已迁至 ctrl_loop
+ */
+
 #include "FreeRTOS.h"
 #include "adc.h"
 #include "dac.h"
 #include "dma.h"
 #include "opamp.h"
 #include "queue.h"
-#include "sogi.h"
-#include "task.h"
 #include "ctrl_loop.h"
 
-extern SPLL_1PH_SOGI spll;
+static uint32_t ac_adc_buffer_origin[2];
+static uint32_t dc_adc_buffer_origin[ADC_BUFFER_LENGTH];
 
-static uint32_t adc_buffer_origin[2];
-TaskHandle_t adc_task_handle = NULL;
-QueueHandle_t adc_queue = NULL;
-float adc_result[2];
+QueueHandle_t dc_adc_queue = NULL;       /* ADC34 直流侧队列 */
 
-/* 内部: 处理单个 ADC 采样点 */
-static inline void adc_process_sample(uint32_t adc_word)
-{
-    /* 提取 ADC1 电压 (低 12bit) 和 ADC2 电流 (高 16bit) */
-    int32_t  v_raw   = (int32_t)(adc_word & 0x0FFF);
-    int32_t  i_raw   = (int32_t)(adc_word >> 16);
-
-    /* 归一化: (raw - offset) / scale */
-    float32_t v_inst = (float32_t)(v_raw - 2048) / 1365.33f;
-    float32_t i_inst = (float32_t)(i_raw - 2048) / 1365.33f;
-
-    /* SOGI-PLL: 更新电网相位 */
-    SPLL_1PH_SOGI_run(&spll, v_inst);
-
-    /* 极性: sinθ > 0 → 正半周 (极性=0), sinθ < 0 → 负半周 (极性=1) */
-    uint8_t polarity = (spll.sine >= 0.0f) ? 0 : 1;
-    float32_t abs_sin = (spll.sine >= 0.0f) ? spll.sine : -spll.sine;
-
-    /* PFC 电流内环 (Vout 缓存由 ctrl_loop 任务维护) */
-    ctrl_loop_current_isr(v_inst, i_inst, ctrl_loop_get_vout_cached(),
-                          abs_sin, polarity);
-}
-
-void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)
-{
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    const uint32_t *ptr = &adc_buffer_origin[0];
-    xQueueSendFromISR(adc_queue, &ptr, &xHigherPriorityTaskWoken);
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-}
-
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
-{
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    const uint32_t *ptr = &adc_buffer_origin[ADC_BUFFER_LENGTH / 2];
-    xQueueSendFromISR(adc_queue, &ptr, &xHigherPriorityTaskWoken);
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-}
+/* ---- ADC12 注册回调: 纯实时控制 (30kHz, 不在 ISR 中发队列) ---- */
 
 void ADC1_half_cplt_isr(ADC_HandleTypeDef *hadc)
 {
     GPIOC->ODR ^= GPIO_PIN_1;
-    adc_process_sample(adc_buffer_origin[0]);
+    ctrl_loop_ac_isr(ac_adc_buffer_origin[0]);   /* SOGI + 电流内环 */
     GPIOC->ODR ^= GPIO_PIN_1;
 }
 
 void ADC1_cplt_isr(ADC_HandleTypeDef *hadc)
 {
     GPIOC->ODR ^= GPIO_PIN_1;
-    adc_process_sample(adc_buffer_origin[1]);
+    ctrl_loop_ac_isr(ac_adc_buffer_origin[1]);   /* SOGI + 电流内环 */
     GPIOC->ODR ^= GPIO_PIN_1;
 }
+
+/* ---- ADC34 直流侧 ISR: 仅发队列 ---- */
+
+void ADC34_half_cplt_isr(ADC_HandleTypeDef *hadc)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    const uint32_t *ptr = &dc_adc_buffer_origin[0];
+    xQueueSendFromISR(dc_adc_queue, &ptr, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
+void ADC34_cplt_isr(ADC_HandleTypeDef *hadc)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    const uint32_t *ptr = &dc_adc_buffer_origin[ADC_BUFFER_LENGTH / 2];
+    xQueueSendFromISR(dc_adc_queue, &ptr, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
+/* ---- 初始化 ---- */
 
 void ADC_init(void)
 {
@@ -77,12 +60,23 @@ void ADC_init(void)
         LOGI("ADC", "OPAMP已启动, 状态: %d", HAL_OPAMP_GetState(&hopamp1));
     }
     HAL_DAC_Start(&hdac3, DAC_CHANNEL_1);
-    adc_queue = xQueueCreate(5, sizeof(uint32_t));
-    // HAL_ADC_Start(&hadc2); // ADC2的 Overrun Behavior 必须配置为 Overwritten
+    dc_adc_queue = xQueueCreate(5, sizeof(uint32_t));
+
+    /* ADC12: 交流侧 V+I, 30kHz 逐周期控制 */
     HAL_ADC_RegisterCallback(&hadc1, HAL_ADC_CONVERSION_HALF_CB_ID, ADC1_half_cplt_isr);
     HAL_ADC_RegisterCallback(&hadc1, HAL_ADC_CONVERSION_COMPLETE_CB_ID, ADC1_cplt_isr);
-    HAL_ADCEx_MultiModeStart_DMA(&hadc1, adc_buffer_origin, ADC_BUFFER_LENGTH);
 
+    /* ADC34: 直流侧 Vout+Iout, 150Hz → 队列 → ctrl_loop 任务 */
+    HAL_ADC_RegisterCallback(&hadc3, HAL_ADC_CONVERSION_HALF_CB_ID, ADC34_half_cplt_isr);
+    HAL_ADC_RegisterCallback(&hadc3, HAL_ADC_CONVERSION_COMPLETE_CB_ID, ADC34_cplt_isr);
+
+    HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
+    HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
+    HAL_ADCEx_Calibration_Start(&hadc3, ADC_SINGLE_ENDED);
+    HAL_ADCEx_Calibration_Start(&hadc4, ADC_SINGLE_ENDED);
+
+    HAL_ADCEx_MultiModeStart_DMA(&hadc1, ac_adc_buffer_origin, 2);
+    HAL_ADCEx_MultiModeStart_DMA(&hadc3, dc_adc_buffer_origin, ADC_BUFFER_LENGTH);
 
     LOGI("ADC", "已启动");
 }
