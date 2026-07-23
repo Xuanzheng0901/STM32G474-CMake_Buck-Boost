@@ -221,7 +221,10 @@ void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
     else
     {
         float i_ref = pfc_gen_i_ref(i_amplitude, abs_cos);
-        float i_error = i_ref - il_inst;
+
+        /* 电流反馈: 负半周电感电流反向, 翻转匹配恒正的 |cos| 参考 */
+        float i_fb = (polarity == 0) ? il_inst : -il_inst;
+        float i_error = i_ref - i_fb;
         float i_correction;
         pid_compute(i_pid, i_error, &i_correction);
 

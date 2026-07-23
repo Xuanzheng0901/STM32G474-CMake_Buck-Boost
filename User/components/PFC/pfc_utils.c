@@ -30,20 +30,32 @@ float32_t pfc_calc_ideal_duty(float32_t vin_inst, float32_t vout)
 
 /* ==================== HRTIM 寄存器写入 ==================== */
 
+/*
+ * TA1 输出配置 (CubeMX):
+ *   Set   = PERIOD   → 周期末置高
+ *   Reset = CMP1     → CMP1 处复位
+ *   ON  = [0, CMP1],  OFF = [CMP1, Period]
+ *   CMP3 空闲 → 用作 ADC 触发点 (较长半周中点, 远离开关沿)
+ */
 void pfc_write_duty(float32_t duty)
 {
-    /* 限幅 */
     if (duty > PFC_DUTY_MAX) duty = PFC_DUTY_MAX;
     if (duty < PFC_DUTY_MIN) duty = PFC_DUTY_MIN;
 
-    uint32_t cmp3 = (uint32_t)(duty * (float32_t)PFC_PWM_PERIOD);
+    uint32_t period = PFC_PWM_PERIOD;
+    uint32_t cmp1   = (uint32_t)(duty * (float32_t)period);
 
-    /*
-     * CMP1 = 0: 周期开始时 TA1 置高 (开关导通)
-     * CMP3 = cmp3: TA1 复位 (开关关断)
-     * Preload 使能 → 下个 PWM 周期自动加载
-     */
-    hhrtim1.Instance->sTimerxRegs[HRTIM_TIMERINDEX_TIMER_A].CMP1xR = 0;
+    /* ADC 采样点: 较长 PWM 半周的中点, 避开开关噪声 */
+    uint32_t cmp3;
+    if (cmp1 <= period / 2) {
+        /* duty ≤ 50%, 较长半周 = OFF [CMP1, Period], 中点 = (CMP1+Period)/2 */
+        cmp3 = (cmp1 + period) / 2;
+    } else {
+        /* duty > 50%, 较长半周 = ON [0, CMP1], 中点 = CMP1/2 */
+        cmp3 = cmp1 / 2;
+    }
+
+    hhrtim1.Instance->sTimerxRegs[HRTIM_TIMERINDEX_TIMER_A].CMP1xR = cmp1;
     hhrtim1.Instance->sTimerxRegs[HRTIM_TIMERINDEX_TIMER_A].CMP3xR = cmp3;
 }
 
