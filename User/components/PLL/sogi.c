@@ -1,5 +1,8 @@
 #include "sogi.h"
 
+#include "dac.h"
+#include "stm32g4xx_hal_dac.h"
+
 SPLL_1PH_SOGI spll;
 float32_t PF_Polarity; //设置为感性或者容性
 float32_t SetPF = 1;   //设置PF值
@@ -151,11 +154,13 @@ float32_t SPLL_1PH_SOGI_run(SPLL_1PH_SOGI *spll_obj, float32_t acValue)
     spll_obj->sine = arm_sin_f32(spll_obj->theta);
     spll_obj->cosine = arm_cos_f32(spll_obj->theta);
 
+    HAL_DAC_SetValue(&hdac3, DAC_CHANNEL_1, DAC_ALIGN_12B_R, (spll_obj->cosine + 1) * 2047);
+
     return spll_obj->theta;
 }
 
 void SOGI_init(void)
 {
     SPLL_1PH_SOGI_reset(&spll);
-    SPLL_1PH_SOGI_config(&spll, 50.0f, 30000.0f, 154.0f, -154.0f);
+    SPLL_1PH_SOGI_config(&spll, 50.0f, 20000.0f, 154.0f, -154.0f);
 }
