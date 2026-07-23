@@ -23,7 +23,9 @@
 #define __MAIN_H
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
+
 #endif
 
 /* Includes ------------------------------------------------------------------*/
@@ -47,7 +49,7 @@ extern "C" {
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-#define ADC_BUFFER_LENGTH 40  // pid调控频率为PWM频率(30kHz) / ADC触发器分频(20) / ADC缓冲区的一半(10) = 150Hz
+#define ADC_BUFFER_LENGTH 40  // pid调控频率为PWM频率(20kHz) / ADC触发器分频(20) / ADC缓冲区的一半(10) = 100Hz
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
@@ -61,7 +63,7 @@ void ctrl_loop_init(void);
 
 /* Private defines -----------------------------------------------------------*/
 #define Handle1 hhrtim1
-#define PWM_Period 44800
+#define PWM_Period 33600
 #define LED_Pin GPIO_PIN_0
 #define LED_GPIO_Port GPIOC
 #define SPI1_RESET_Pin GPIO_PIN_4
