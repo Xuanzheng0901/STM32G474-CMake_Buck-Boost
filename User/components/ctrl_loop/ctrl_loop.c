@@ -16,6 +16,7 @@
 #include "ctrl_loop.h"
 #include "pfc_utils.h"
 #include "pfc_config.h"
+#include "pid_ctrl_internal.h"
 #include "sogi.h"
 
 #include "FreeRTOS.h"
@@ -31,8 +32,8 @@ extern QueueHandle_t dc_adc_queue;
 
 /* ==================== 内部状态 ==================== */
 
-static PI_Controller  i_pi;            /**< 电流内环 PI */
-static PI_Controller  v_pi;            /**< 电压外环 PI */
+static pid_ctrl_block_handle_t i_pid = NULL;  /**< 电流内环 PID (Kd=0 → PI) */
+static pid_ctrl_block_handle_t v_pid = NULL;  /**< 电压外环 PID (Kd=0 → PI) */
 
 static CtrlLoop_State state;           /**< 当前控制状态 */
 static float32_t i_amplitude;          /**< 电流参考幅值 (电压环输出) */
@@ -133,22 +134,40 @@ static void ctrl_loop_routine(void *pvParameters)
 
 void ctrl_loop_init(void)
 {
-    /* 电流内环 PI: Ki 预乘 Ts(1/30kHz) */
-    float32_t i_ki = PFC_I_KI_DEFAULT * (1.0f / PFC_PWM_FREQ);
+    /* ---- 电流内环 PID (Kd=0, 增量式) ---- */
+    float i_ki = PFC_I_KI_DEFAULT / PFC_PWM_FREQ;  /* 连续 Ki → 离散: Ki*Ts */
 
-    pi_init(&i_pi,
-            PFC_I_KP_DEFAULT, i_ki,
-            PFC_I_INTEGRAL_MAX, -PFC_I_INTEGRAL_MAX,
-            PFC_I_OUTPUT_MAX,  -PFC_I_OUTPUT_MAX);
+    pid_ctrl_config_t i_cfg = {
+        .init_param = {
+            .kp           = PFC_I_KP_DEFAULT,
+            .ki           = i_ki,
+            .kd           = 0.0f,
+            .max_output   =  PFC_I_OUTPUT_MAX,
+            .min_output   = -PFC_I_OUTPUT_MAX,
+            .max_integral =  PFC_I_INTEGRAL_MAX,
+            .min_integral = -PFC_I_INTEGRAL_MAX,
+            .cal_type     = PID_CAL_TYPE_INCREMENTAL,
+        }
+    };
+    pid_new_control_block(&i_cfg, &i_pid);
 
-    /* 电压外环 PI: Ki 预乘 Ts(电压环周期 = VOLTAGE_LOOP_DIV / 30kHz) */
-    float32_t v_ts = (float32_t)PFC_VOLTAGE_LOOP_DIV / PFC_PWM_FREQ;
-    float32_t v_ki = PFC_V_KI_DEFAULT * v_ts;
+    /* ---- 电压外环 PID (Kd=0, 增量式) ---- */
+    float v_ts = (float)PFC_VOLTAGE_LOOP_DIV / PFC_PWM_FREQ;
+    float v_ki = PFC_V_KI_DEFAULT * v_ts;
 
-    pi_init(&v_pi,
-            PFC_V_KP_DEFAULT, v_ki,
-            PFC_V_INTEGRAL_MAX, 0.0f,
-            PFC_V_OUTPUT_MAX,   0.0f);
+    pid_ctrl_config_t v_cfg = {
+        .init_param = {
+            .kp           = PFC_V_KP_DEFAULT,
+            .ki           = v_ki,
+            .kd           = 0.0f,
+            .max_output   = PFC_V_OUTPUT_MAX,
+            .min_output   = 0.0f,
+            .max_integral = PFC_V_INTEGRAL_MAX,
+            .min_integral = 0.0f,
+            .cal_type     = PID_CAL_TYPE_INCREMENTAL,
+        }
+    };
+    pid_new_control_block(&v_cfg, &v_pid);
 
     /* 软启动 */
     state             = CTRL_STATE_SOFT_START;
@@ -185,9 +204,10 @@ void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
         prev_polarity = polarity;
     }
 
-    float32_t i_ref = pfc_gen_i_ref(i_amplitude, abs_sin);
-    float32_t i_error      = i_ref - il_inst;
-    float32_t i_correction = pi_compute(&i_pi, i_error);
+    float i_ref   = pfc_gen_i_ref(i_amplitude, abs_sin);
+    float i_error = i_ref - il_inst;
+    float i_correction;
+    pid_compute(i_pid, i_error, &i_correction);
 
     float32_t duty_ideal = pfc_calc_ideal_duty(vin_inst, vout);
     duty_current = duty_ideal + i_correction;
@@ -215,8 +235,10 @@ void ctrl_loop_voltage_task(float32_t vout_measured)
         }
     }
 
-    float32_t v_error = vref_ramp - vout_measured;
-    i_amplitude = pi_compute(&v_pi, v_error);
+    float v_error = vref_ramp - vout_measured;
+    float result;
+    pid_compute(v_pid, v_error, &result);
+    i_amplitude = result;
 }
 
 /* ---- 运行时修改目标电压 ---- */
