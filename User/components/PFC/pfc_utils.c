@@ -59,18 +59,23 @@ void pfc_write_duty(float32_t duty)
     hhrtim1.Instance->sTimerxRegs[HRTIM_TIMERINDEX_TIMER_A].CMP3xR = cmp3;
 }
 
+/*
+ * TB1: CubeMX 设 Set=NONE, Reset=NONE.
+ * 直接软件强制输出电平, 不经过比较器, 无 Set/Reset 重合问题.
+ * TB2 由硬件自动反相, 无需软件控制.
+ */
 void pfc_set_polarity(uint8_t polarity)
 {
     if (polarity == 0)
     {
-        /* 正半周: TB1 输出常低 → 硬件反相后 TB2 常高 (下管导通, 电流回流) */
-        hhrtim1.Instance->sTimerxRegs[HRTIM_TIMERINDEX_TIMER_B].CMP1xR = 0;
-        hhrtim1.Instance->sTimerxRegs[HRTIM_TIMERINDEX_TIMER_B].CMP3xR = 0;
+        /* 正半周: TB1 强制 LOW → 硬件反相后 TB2=HIGH (下管导通回流) */
+        HAL_HRTIM_WaveformSetOutputLevel(&hhrtim1, HRTIM_TIMERINDEX_TIMER_B,
+                                         HRTIM_OUTPUT_TB1, HRTIM_OUTPUTLEVEL_INACTIVE);
     }
     else
     {
-        /* 负半周: TB1 输出常高 → 硬件反相后 TB2 常低 (上管导通, 电流回流) */
-        hhrtim1.Instance->sTimerxRegs[HRTIM_TIMERINDEX_TIMER_B].CMP1xR = 0;
-        hhrtim1.Instance->sTimerxRegs[HRTIM_TIMERINDEX_TIMER_B].CMP3xR = PFC_PWM_PERIOD;
+        /* 负半周: TB1 强制 HIGH → 硬件反相后 TB2=LOW (上管导通回流) */
+        HAL_HRTIM_WaveformSetOutputLevel(&hhrtim1, HRTIM_TIMERINDEX_TIMER_B,
+                                         HRTIM_OUTPUT_TB1, HRTIM_OUTPUTLEVEL_ACTIVE);
     }
 }
