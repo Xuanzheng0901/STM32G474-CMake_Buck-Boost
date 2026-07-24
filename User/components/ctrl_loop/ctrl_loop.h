@@ -102,4 +102,10 @@ float32_t ctrl_loop_get_vout_cached(void);
 
 void ctrl_loop_set_vout_cache(float32_t vout);
 
+/**
+ * @brief  设置慢管换向相位偏移
+ * @param  deg : 偏移角度 (度), 正=提前, 负=延后, 默认 0
+ */
+void ctrl_loop_set_polarity_offset(float32_t deg);
+
 #endif /* __CTRL_LOOP_H__ */

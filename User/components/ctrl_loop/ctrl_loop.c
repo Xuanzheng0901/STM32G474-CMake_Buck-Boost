@@ -41,7 +41,10 @@ static float32_t duty_current;         /**< 当前占空比 (用于调试) */
 static float32_t vref_ramp;            /**< 电压环参考斜坡 (运行时变量) */
 static float32_t vout_target;          /**< 目标输出电压 (可通过 API 运行时修改) */
 static uint32_t soft_start_ticks;     /**< 软启动已进行节拍数 */
-static uint8_t prev_polarity;        /**< 上一拍极性 (减少重复 HRTIM 写入) */
+static uint32_t soft_start_total;     /**< 软启动总节拍数 (频率 × 秒数) */
+static uint8_t hw_polarity;         /**< 上次写入硬件的极性 */
+static float32_t pol_cos_off;         /**< cos(offset) 慢管相位补偿 */
+static float32_t pol_sin_off;         /**< sin(offset) 慢管相位补偿 */
 
 /* 直流测量值 (由 dc_data_process 更新, 供 UI 读取和 ISR 使用) */
 static float now_vout_V = 0.0f;       /**< DC 输出电压 (V) */
@@ -80,9 +83,12 @@ void ctrl_loop_ac_isr(uint32_t adc_word)
     /* SOGI-PLL: 更新电网相位 */
     SPLL_1PH_SOGI_run(&spll, v_inst);
 
-    /* cosine 与电网同相 → 电流参考跟踪 |cosθ| */
-    uint8_t   polarity = (spll.cosine >= 0.0f) ? 0 : 1;
-    float32_t abs_cos  = (spll.cosine >= 0.0f) ? spll.cosine : -spll.cosine;
+    /* 慢管相位偏移: cos_shifted = cos(θ + offset) = cosθ·cos_off - sinθ·sin_off */
+    float32_t cos_shifted = spll.cosine * pol_cos_off - spll.sine * pol_sin_off;
+
+    /* 电流参考跟踪 |cosθ| (不经偏移, 始终与电网电压同相) */
+    uint8_t polarity = (cos_shifted >= 0.0f) ? 0 : 1;
+    float32_t abs_cos = (spll.cosine >= 0.0f) ? spll.cosine : -spll.cosine;
 
     /* PFC 电流内环 */
     ctrl_loop_current_isr(v_inst, i_inst, now_vout_V,
@@ -155,7 +161,7 @@ void ctrl_loop_init(void)
     pid_new_control_block(&i_cfg, &i_pid);
 
     /* ---- 电压外环 PID (Kd=0, 增量式) ---- */
-    float v_ts = (float)PFC_VOLTAGE_LOOP_DIV / PFC_PWM_FREQ;
+    float v_ts = 1.0f / PFC_VOLTAGE_LOOP_FREQ;  /* 100Hz → 10ms */
     float v_ki = PFC_V_KI_DEFAULT * v_ts;
 
     pid_ctrl_config_t v_cfg = {
@@ -177,15 +183,16 @@ void ctrl_loop_init(void)
     vout_target = PFC_NOMINAL_VOUT;
     vref_ramp = 0.0f;
     soft_start_ticks = 0;
+    soft_start_total = (uint32_t)(PFC_SOFTSTART_SEC * PFC_VOLTAGE_LOOP_FREQ);
     i_amplitude = 0.0f;
     duty_current = 0.0f;
-    prev_polarity = 0;
+    hw_polarity = 0;
+    pol_cos_off = 1.0f;   /* cos(0°) */
+    pol_sin_off = 0.0f;   /* sin(0°) */
     now_vout_V = 0.0f;
     now_iout_A = 0.0f;
 
-    /* Timer B 安全态: 全关 */
-    hhrtim1.Instance->sTimerxRegs[HRTIM_TIMERINDEX_TIMER_B].CMP1xR = 0;
-    hhrtim1.Instance->sTimerxRegs[HRTIM_TIMERINDEX_TIMER_B].CMP3xR = 0;
+    ctrl_loop_set_polarity_offset(8.64f);
 
     /* 创建控制任务 */
     xTaskCreate(ctrl_loop_routine, "CtrlLoop", 2048, NULL, 15, NULL);
@@ -202,10 +209,10 @@ void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
                            float32_t vout,
                            float32_t abs_cos, uint8_t polarity)
 {
-    if(polarity != prev_polarity)
+    if(polarity != hw_polarity)
     {
         pfc_set_polarity(polarity);
-        prev_polarity = polarity;
+        hw_polarity = polarity;
     }
 
     /*
@@ -214,7 +221,7 @@ void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
      */
     float vin_abs = (vin_inst >= 0.0f) ? vin_inst : -vin_inst;
 
-    if (vout < vin_abs + 0.5f)
+    if(vout < vin_abs + 0.5f)
     {
         duty_current = 0.0f;
     }
@@ -249,9 +256,9 @@ void ctrl_loop_voltage_task(float32_t vout_measured)
     {
         soft_start_ticks++;
         vref_ramp = vout_target *
-                    ((float32_t)soft_start_ticks / (float32_t)PFC_SOFTSTART_STEPS);
+                    ((float32_t)soft_start_ticks / (float32_t)soft_start_total);
 
-        if(soft_start_ticks >= PFC_SOFTSTART_STEPS)
+        if(soft_start_ticks >= soft_start_total)
         {
             vref_ramp = vout_target;
             state = CTRL_STATE_RUNNING;
@@ -275,7 +282,7 @@ void ctrl_loop_set_vout(float32_t vout)
     if(state == CTRL_STATE_RUNNING)
     {
         state = CTRL_STATE_SOFT_START;
-        soft_start_ticks = (uint32_t)(vref_ramp / vout_target * PFC_SOFTSTART_STEPS);
+        soft_start_ticks = (uint32_t)(vref_ramp / vout_target * (float)soft_start_total);
     }
 }
 
@@ -314,4 +321,11 @@ float32_t ctrl_loop_get_vout_cached(void)
 void ctrl_loop_set_vout_cache(float32_t vout)
 {
     now_vout_V = vout;
+}
+
+void ctrl_loop_set_polarity_offset(float32_t deg)
+{
+    float32_t rad = deg * 0.0174533f;               /* ° → rad */
+    pol_cos_off = arm_cos_f32(rad);                 /* cos(offset) */
+    pol_sin_off = arm_sin_f32(rad);                 /* sin(offset) */
 }
