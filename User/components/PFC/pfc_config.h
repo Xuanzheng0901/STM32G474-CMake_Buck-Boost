@@ -74,4 +74,12 @@
 #define PFC_V_INTEGRAL_MAX      10.0f
 #define PFC_V_OUTPUT_MAX        3.0f
 
+/* ==================== 保护参数 ==================== */
+#define PFC_OVP_RATIO           1.2f        /**< 过压保护阈值 = Vout_target × ratio */
+#define PFC_OCP_AMPS            3.5f        /**< 过流保护阈值 (A) */
+#define PFC_FAULT_RETRY_MS      5000        /**< 故障后重试间隔 (ms) */
+
+/* ==================== 调试选项 ==================== */
+#define PFC_DEBUG_DAC_OUTPUT    1           /**< 设为 1 启用 ISR 中 DAC 调试输出 */
+
 #endif /* __PFC_CONFIG_H__ */
