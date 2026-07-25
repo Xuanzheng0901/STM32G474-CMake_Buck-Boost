@@ -19,9 +19,10 @@ CtrlLoop_State ctrl_loop_get_state(void);
 /* AC 采样 ISR 入口 (30kHz, 由 ADC 回调调用) */
 void ctrl_loop_ac_isr(uint32_t adc_word);
 
-/* 电流内环 (30kHz ISR) */
-void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
-                           float32_t vout, float32_t abs_cos, uint8_t polarity);
+/* 电流内环 (30kHz ISR)
+ * polarity: 慢桥臂换向 (基于电压过零), i_sign: 电流反馈符号 (基于电流参考过零) */
+void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst, float32_t vout,
+                           float32_t abs_ref, uint8_t polarity, uint8_t i_sign);
 
 /* 设置目标输出电压, 自动触发软启动过渡 */
 void ctrl_loop_set_vout(float32_t vout);
