@@ -154,7 +154,9 @@ float32_t SPLL_1PH_SOGI_run(SPLL_1PH_SOGI *spll_obj, float32_t acValue)
     spll_obj->sine = arm_sin_f32(spll_obj->theta);
     spll_obj->cosine = arm_cos_f32(spll_obj->theta);
 
+#if SOGI_DEBUG_DAC_OUTPUT
     HAL_DAC_SetValue(&hdac3, DAC_CHANNEL_1, DAC_ALIGN_12B_R, (spll_obj->cosine + 1) * 2047);
+#endif
 
     return spll_obj->theta;
 }

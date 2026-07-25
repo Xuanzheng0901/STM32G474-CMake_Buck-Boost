@@ -42,6 +42,9 @@
 
 #include "arm_math.h"
 
+/** @brief 调试 DAC 输出使能 (1=输出 cosθ 到 DAC_CH1, 0=禁用) */
+#define SOGI_DEBUG_DAC_OUTPUT   1
+
 /** @brief SOGI 阻尼因子 k
  *  @details k 越大 → 带宽越宽、响应越快、抗谐波能力下降
  *           k 越小 → 选择性越好、响应变慢
