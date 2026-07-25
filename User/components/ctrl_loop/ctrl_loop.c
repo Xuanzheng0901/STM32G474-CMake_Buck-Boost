@@ -115,9 +115,9 @@ static void dc_data_process(uint32_t *data_buf)
     float v_avg = (float)v_sum / (float)len;
     float i_avg = (float)i_sum / (float)len;
 
-    /* 归一化并存储 (供 ISR 和 UI 使用) */
-    now_vout_V = (v_avg - 2048.0f) / 1365.33f;
-    now_iout_A = (i_avg - 2048.0f) / 1365.33f;
+    /* 实际物理量 (V, A) */
+    now_vout_V = (v_avg - PFC_VOUT_OFFSET) / PFC_VOUT_LSB_PER_V;
+    now_iout_A = (i_avg - PFC_IOUT_OFFSET) / PFC_IOUT_LSB_PER_A;
 
     /* 电压外环: Vref - Vout → 电流参考幅值 */
     ctrl_loop_voltage_task(now_vout_V);
