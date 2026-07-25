@@ -4,8 +4,6 @@
 #include "stm32g4xx_hal_dac.h"
 
 SPLL_1PH_SOGI spll;
-float32_t PF_Polarity; //设置为感性或者容性
-float32_t SetPF = 1;   //设置PF值
 
 //复位SPLL参数
 void SPLL_1PH_SOGI_reset(SPLL_1PH_SOGI *spll_obj)

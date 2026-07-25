@@ -4,7 +4,10 @@
  */
 
 #include "ctrl_loop_state.h"
+
 #include "pfc_config.h"
+#include "sogi.h"
+#include <stdbool.h>
 
 /* ==================== 内部状态 ==================== */
 
@@ -13,6 +16,32 @@ static float32_t vref_ramp;
 static float32_t vout_target;
 static uint32_t soft_start_ticks;
 static uint32_t soft_start_total;
+
+/* ==================== 故障检测 ==================== */
+
+static bool check_fault(float32_t vout, float32_t iout)
+{
+    /* 过压 */
+    if (vout > vout_target * PFC_OVP_RATIO)
+        return true;
+
+    /* 过流 */
+    if (iout > PFC_OCP_AMPS)
+        return true;
+
+    /* 电网丢失: PLL 锁定的电压幅值过低 */
+    if (spll.u_D[0] < PFC_UVP_VIN_RMS * 1.414f)
+        return true;
+
+    /* 软启动超时 */
+    if (state == CTRL_STATE_SOFT_START) {
+        uint32_t timeout_ticks = (uint32_t)(PFC_SS_TIMEOUT_SEC * PFC_VOLTAGE_LOOP_FREQ);
+        if (soft_start_ticks > timeout_ticks)
+            return true;
+    }
+
+    return false;
+}
 
 /* ==================== API 实现 ==================== */
 
@@ -27,13 +56,10 @@ void ctrl_loop_state_init(float32_t target, uint32_t ramp_ticks)
 
 float32_t ctrl_loop_state_update(float32_t vout, float32_t iout)
 {
-    /* 故障检测 */
-    if (state != CTRL_STATE_FAULT) {
-        if (vout > vout_target * PFC_OVP_RATIO || iout > PFC_OCP_AMPS) {
-            state = CTRL_STATE_FAULT;
-            vref_ramp = 0.0f;
-            return 0.0f;
-        }
+    if (state != CTRL_STATE_FAULT && check_fault(vout, iout)) {
+        state = CTRL_STATE_FAULT;
+        vref_ramp = 0.0f;
+        return 0.0f;
     }
 
     if (state == CTRL_STATE_IDLE || state == CTRL_STATE_FAULT)
@@ -50,10 +76,9 @@ float32_t ctrl_loop_state_update(float32_t vout, float32_t iout)
     return vref_ramp;
 }
 
-CtrlLoop_State ctrl_loop_state_get(void)    { return state; }
-
-float32_t ctrl_loop_state_get_vref(void)     { return vref_ramp; }
-float32_t ctrl_loop_state_get_vout_target(void) { return vout_target; }
+CtrlLoop_State ctrl_loop_state_get(void)          { return state; }
+float32_t ctrl_loop_state_get_vref(void)           { return vref_ramp; }
+float32_t ctrl_loop_state_get_vout_target(void)    { return vout_target; }
 
 void ctrl_loop_state_set_vout(float32_t vout)
 {

@@ -77,6 +77,8 @@
 /* ==================== 保护参数 ==================== */
 #define PFC_OVP_RATIO           1.2f        /**< 过压保护阈值 = Vout_target × ratio */
 #define PFC_OCP_AMPS            3.5f        /**< 过流保护阈值 (A) */
+#define PFC_UVP_VIN_RMS         5.0f        /**< 电网欠压阈值 RMS (V), 低于此值视为电网丢失 */
+#define PFC_SS_TIMEOUT_SEC      5.0f        /**< 软启动超时 (s), 超时未达目标触发故障 */
 #define PFC_FAULT_RETRY_MS      5000        /**< 故障后重试间隔 (ms) */
 
 /* ==================== 调试选项 ==================== */
