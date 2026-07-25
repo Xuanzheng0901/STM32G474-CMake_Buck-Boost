@@ -170,7 +170,7 @@ void ctrl_loop_init(void)
         .init_param = {
             .kp           = PFC_V_KP_DEFAULT,
             .ki           = v_ki,
-            .kd           = 0.0f,
+            .kd           = PFC_V_KD_DEFAULT,
             .max_output   = PFC_V_OUTPUT_MAX,
             .min_output   = 0.0f,
             .max_integral = PFC_V_INTEGRAL_MAX,
