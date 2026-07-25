@@ -1,6 +1,6 @@
 /**
  * @file    ADC.c
- * @brief   ADC 硬件配置 + DMA 数据搬运, 所有控制逻辑已迁至 ctrl_loop
+ * @brief   ADC 硬件配置 + DMA 数据搬运, 控制逻辑已迁至 ctrl_loop
  */
 
 #include "FreeRTOS.h"
@@ -11,44 +11,33 @@
 #include "queue.h"
 #include "ctrl_loop.h"
 
-static uint32_t ac_adc_buffer_origin[2];
-static uint32_t dc_adc_buffer_origin[ADC_BUFFER_LENGTH];
+static uint32_t ac_adc_buf[2];
+static uint32_t dc_adc_buf[ADC_BUFFER_LENGTH];
 
-QueueHandle_t dc_adc_queue = NULL;       /* ADC34 直流侧队列 */
+QueueHandle_t dc_adc_queue;
 
-/* ---- ADC12 注册回调: 纯实时控制 (30kHz, 不在 ISR 中发队列) ---- */
+/* ---- ADC12 交流侧 ISR: 逐周期控制 (30kHz) ---- */
 
-void ADC1_half_cplt_isr(ADC_HandleTypeDef *hadc)
+static inline void ac_isr(uint32_t adc_word)
 {
-    GPIOC->ODR ^= GPIO_PIN_1;
-    ctrl_loop_ac_isr(ac_adc_buffer_origin[0]);   /* SOGI + 电流内环 */
-    GPIOC->ODR ^= GPIO_PIN_1;
+    ctrl_loop_ac_isr(adc_word);
 }
 
-void ADC1_cplt_isr(ADC_HandleTypeDef *hadc)
+void ADC1_half_cplt_isr(ADC_HandleTypeDef *hadc) { ac_isr(ac_adc_buf[0]); }
+void ADC1_cplt_isr(ADC_HandleTypeDef *hadc)      { ac_isr(ac_adc_buf[1]); }
+
+/* ---- ADC34 直流侧 ISR: 发队列 ---- */
+
+static inline void dc_isr(uint16_t offset)
 {
-    GPIOC->ODR ^= GPIO_PIN_1;
-    ctrl_loop_ac_isr(ac_adc_buffer_origin[1]);   /* SOGI + 电流内环 */
-    GPIOC->ODR ^= GPIO_PIN_1;
+    BaseType_t woke = pdFALSE;
+    const uint32_t *ptr = &dc_adc_buf[offset];
+    xQueueSendFromISR(dc_adc_queue, &ptr, &woke);
+    portYIELD_FROM_ISR(woke);
 }
 
-/* ---- ADC34 直流侧 ISR: 仅发队列 ---- */
-
-void ADC34_half_cplt_isr(ADC_HandleTypeDef *hadc)
-{
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    const uint32_t *ptr = &dc_adc_buffer_origin[0];
-    xQueueSendFromISR(dc_adc_queue, &ptr, &xHigherPriorityTaskWoken);
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-}
-
-void ADC34_cplt_isr(ADC_HandleTypeDef *hadc)
-{
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    const uint32_t *ptr = &dc_adc_buffer_origin[ADC_BUFFER_LENGTH / 2];
-    xQueueSendFromISR(dc_adc_queue, &ptr, &xHigherPriorityTaskWoken);
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-}
+void ADC34_half_cplt_isr(ADC_HandleTypeDef *hadc) { dc_isr(0); }
+void ADC34_cplt_isr(ADC_HandleTypeDef *hadc)      { dc_isr(ADC_BUFFER_LENGTH / 2); }
 
 /* ---- 初始化 ---- */
 
@@ -61,11 +50,9 @@ void ADC_init(void)
     HAL_DAC_Start(&hdac3, DAC_CHANNEL_2);
     dc_adc_queue = xQueueCreate(5, sizeof(uint32_t));
 
-    /* ADC12: 交流侧 V+I, 30kHz 逐周期控制 */
     HAL_ADC_RegisterCallback(&hadc1, HAL_ADC_CONVERSION_HALF_CB_ID, ADC1_half_cplt_isr);
     HAL_ADC_RegisterCallback(&hadc1, HAL_ADC_CONVERSION_COMPLETE_CB_ID, ADC1_cplt_isr);
 
-    /* ADC34: 直流侧 Vout+Iout, 150Hz → 队列 → ctrl_loop 任务 */
     HAL_ADC_RegisterCallback(&hadc3, HAL_ADC_CONVERSION_HALF_CB_ID, ADC34_half_cplt_isr);
     HAL_ADC_RegisterCallback(&hadc3, HAL_ADC_CONVERSION_COMPLETE_CB_ID, ADC34_cplt_isr);
 
@@ -74,8 +61,13 @@ void ADC_init(void)
     HAL_ADCEx_Calibration_Start(&hadc3, ADC_SINGLE_ENDED);
     HAL_ADCEx_Calibration_Start(&hadc4, ADC_SINGLE_ENDED);
 
-    HAL_ADCEx_MultiModeStart_DMA(&hadc1, ac_adc_buffer_origin, 2);
-    HAL_ADCEx_MultiModeStart_DMA(&hadc3, dc_adc_buffer_origin, ADC_BUFFER_LENGTH);
+    HAL_ADCEx_MultiModeStart_DMA(&hadc1, ac_adc_buf, 2);
+    HAL_ADCEx_MultiModeStart_DMA(&hadc3, dc_adc_buf, ADC_BUFFER_LENGTH);
 
     LOGI("ADC", "已启动");
+}
+
+QueueHandle_t ADC_get_dc_queue(void)
+{
+    return dc_adc_queue;
 }
