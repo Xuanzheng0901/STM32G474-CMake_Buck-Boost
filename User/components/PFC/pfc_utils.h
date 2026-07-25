@@ -12,7 +12,9 @@
 /* ==================== PFC 工具函数声明 ==================== */
 
 float32_t pfc_calc_ideal_duty(float32_t vin_inst, float32_t vout);
-void pfc_write_duty(float32_t duty);
+
+void pfc_write_duty(float32_t duty, uint8_t polarity);
+
 void pfc_set_polarity(uint8_t polarity);
 
 static inline float32_t pfc_gen_i_ref(float32_t i_amplitude, float32_t abs_sin)
