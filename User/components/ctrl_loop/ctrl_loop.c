@@ -219,13 +219,8 @@ void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
         hw_polarity = polarity;
     }
 
-    /*
-     * 启动保护: Vout 低于输入峰值时 Boost 无法工作.
-     * 占空比强制为 0, 体二极管预充电输出电容, Vout 升到 Vin_peak 后再切入.
-     */
-    float vin_abs = (vin_inst >= 0.0f) ? vin_inst : -vin_inst;
-
-    if(vout < vin_abs + 0.5f)
+    /* 启动保护: Vout < 3V 时等体二极管预充电 */
+    if(vout < 3.0f)
     {
         duty_current = 0.0f;
     }
