@@ -154,6 +154,9 @@ void ctrl_loop_init(void)
 
     ctrl_loop_set_polarity_offset(-1.0f);
 
+    /* 慢桥臂初始安全态: 双管关闭, 体二极管充当整流 */
+    pfc_set_polarity(0);
+
     xTaskCreate(ctrl_loop_routine, "CtrlLoop", 2048, NULL, 15, NULL);
 }
 
