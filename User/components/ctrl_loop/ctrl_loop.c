@@ -226,18 +226,17 @@ void ctrl_loop_clear_fault(void)
 
 void ctrl_loop_set_pf(float32_t pf)
 {
-    /* pf: -1~1, 正=容性(超前), 负=感性(滞后) */
+    /* pf = cos(φ): -1~1, 正=容性(超前), 负=感性(滞后)
+     * cos_phi = |pf|,  sin_phi = sign(pf) × √(1-pf²) */
     float32_t abs_pf = fabsf(pf);
     if (abs_pf > 1.0f) abs_pf = 1.0f;
-    float32_t phi = acosf(abs_pf);
-    if (pf < 0.0f) phi = -phi;
-    pf_cos_phi = cosf(phi);
-    pf_sin_phi = sinf(phi);
+    pf_cos_phi = abs_pf;
+    arm_sqrt_f32(1.0f - abs_pf * abs_pf, &pf_sin_phi);
+    if (pf < 0.0f) pf_sin_phi = -pf_sin_phi;
 }
 
 float32_t ctrl_loop_get_pf(void)
 {
-    /* cos(φ), 正=容性, 负=感性 */
     return (pf_sin_phi >= 0.0f) ? pf_cos_phi : -pf_cos_phi;
 }
 
