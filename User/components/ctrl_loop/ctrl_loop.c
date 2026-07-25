@@ -14,6 +14,8 @@
  */
 
 #include "ctrl_loop.h"
+
+#include "dac.h"
 #include "pfc_utils.h"
 #include "pfc_config.h"
 #include "pid_ctrl_internal.h"
