@@ -43,4 +43,8 @@ void ctrl_loop_set_polarity_offset(float32_t deg);
 /* 故障清除, 重新软启动 */
 void ctrl_loop_clear_fault(void);
 
+/* 设置功率因数 (-1~1, 正=容性/超前, 负=感性/滞后, 默认=1) */
+void ctrl_loop_set_pf(float32_t pf);
+float32_t ctrl_loop_get_pf(void);
+
 #endif /* __CTRL_LOOP_H__ */

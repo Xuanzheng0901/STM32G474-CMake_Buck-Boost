@@ -37,6 +37,8 @@ static float32_t duty_current;          /* 当前占空比 */
 static uint8_t  hw_polarity;            /* 上次写入硬件的极性 */
 static float32_t pol_cos_off  = 1.0f;   /* cos(offset) */
 static float32_t pol_sin_off  = 0.0f;   /* sin(offset) */
+static float32_t pf_cos_phi   = 1.0f;   /* cos(φ), PF 相位偏移 (1=unity) */
+static float32_t pf_sin_phi   = 0.0f;   /* sin(φ), PF 相位偏移 */
 
 static float now_vout_V;                /* DC 输出电压 (V) */
 static float now_iout_A;                /* DC 输出电流 (A) */
@@ -72,11 +74,15 @@ void ctrl_loop_ac_isr(uint32_t adc_word)
     v_filt += ((float32_t)(v_raw - PFC_VIN_OFFSET) / PFC_VIN_LSB_PER_V - v_filt) * 0.7f;
     i_filt += ((float32_t)(i_raw - PFC_IIN_OFFSET) / PFC_IIN_LSB_PER_A - i_filt) * 0.7f;
 
-    /* 极性 + |cos| */
+    /* 极性 + 电流参考波形 (含 PF 相位偏移) */
     uint8_t polarity = (spll.cosine * pol_cos_off >= spll.sine * pol_sin_off) ? 0 : 1;
-    float32_t abs_cos = fabsf(spll.cosine);
 
-    ctrl_loop_current_isr(v_filt, i_filt, now_vout_V, abs_cos, polarity);
+    /* |sin(ωt + φ)| = |cosine·cosφ - sine·sinφ|
+     * unity PF: cosφ=1, sinφ=0 → |cosine| = 原始电流参考 */
+    float32_t ref_wave = spll.cosine * pf_cos_phi - spll.sine * pf_sin_phi;
+    float32_t abs_ref = fabsf(ref_wave);
+
+    ctrl_loop_current_isr(v_filt, i_filt, now_vout_V, abs_ref, polarity);
 }
 
 /* ==================== DC 数据处理 (任务上下文) ==================== */
@@ -214,6 +220,25 @@ void ctrl_loop_clear_fault(void)
 {
     ctrl_loop_state_clear_fault();
     i_amplitude = 0.0f;
+}
+
+/* ---- PF 设定 ---- */
+
+void ctrl_loop_set_pf(float32_t pf)
+{
+    /* pf: -1~1, 正=容性(超前), 负=感性(滞后) */
+    float32_t abs_pf = fabsf(pf);
+    if (abs_pf > 1.0f) abs_pf = 1.0f;
+    float32_t phi = acosf(abs_pf);
+    if (pf < 0.0f) phi = -phi;
+    pf_cos_phi = cosf(phi);
+    pf_sin_phi = sinf(phi);
+}
+
+float32_t ctrl_loop_get_pf(void)
+{
+    /* cos(φ), 正=容性, 负=感性 */
+    return (pf_sin_phi >= 0.0f) ? pf_cos_phi : -pf_cos_phi;
 }
 
 /* ---- Getter ---- */
