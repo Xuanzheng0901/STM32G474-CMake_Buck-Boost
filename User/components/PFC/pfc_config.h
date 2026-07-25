@@ -31,6 +31,8 @@
  */
 #define PFC_VIN_OFFSET          2048.0f
 #define PFC_VIN_LSB_PER_V       34.93f        /**< 1V 对应 ADC LSB 数 */
+#define PFC_SOGI_NORM_DIV       1365.33f      /**< SOGI 输入归一化: (raw-offset)/此值 → per-unit */
+#define PFC_SOGI_VOLT_PER_UNIT  (PFC_SOGI_NORM_DIV / PFC_VIN_LSB_PER_V) /**< per-unit 转实际电压 */
 
 /*
  * ADC2_IN8 (AC 电流): 132mV/A, 偏置 1.65V → 2253

@@ -67,7 +67,7 @@ void ctrl_loop_ac_isr(uint32_t adc_word)
     int32_t i_raw = (int32_t)(adc_word >> 16);
 
     /* SOGI-PLL */
-    SPLL_1PH_SOGI_run(&spll, (float32_t)(v_raw - 2048) / 1365.33f);
+    SPLL_1PH_SOGI_run(&spll, (float32_t)(v_raw - PFC_VIN_OFFSET) / PFC_SOGI_NORM_DIV);
 
     /* 滑动平均滤波 */
     static float32_t v_filt, i_filt;

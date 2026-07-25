@@ -29,8 +29,8 @@ static bool check_fault(float32_t vout, float32_t iout)
     if (iout > PFC_OCP_AMPS)
         return true;
 
-    /* 电网丢失: PLL 锁定的电压幅值过低 */
-    if (spll.u_D[0] < PFC_UVP_VIN_RMS * 1.414f)
+    /* 电网丢失: SOGI u_D(per-unit) 转实际 Vpeak → 与阈值比较 */
+    if (spll.u_D[0] * PFC_SOGI_VOLT_PER_UNIT < PFC_UVP_VIN_RMS * 1.414f)
         return true;
 
     /* 软启动超时 */
