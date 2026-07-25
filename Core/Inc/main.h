@@ -23,9 +23,7 @@
 #define __MAIN_H
 
 #ifdef __cplusplus
-extern "C"
-{
-
+extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/

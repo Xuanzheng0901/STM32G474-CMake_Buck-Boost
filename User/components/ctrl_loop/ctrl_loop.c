@@ -239,7 +239,9 @@ void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
         duty_current = duty_ideal + i_correction;
     }
 
-    pfc_write_duty(duty_current);
+    HAL_DAC_SetValue(&hdac3, DAC_CHANNEL_2, DAC_ALIGN_12B_R, (uint16_t)(duty_current * 4096.0f));
+
+    pfc_write_duty(duty_current, polarity);
 }
 
 /* ---- 电压外环 (~300Hz) ---- */

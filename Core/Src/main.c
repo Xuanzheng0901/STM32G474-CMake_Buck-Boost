@@ -111,6 +111,7 @@ int main(void)
   MX_SPI3_Init();
   MX_DAC3_Init();
   MX_OPAMP1_Init();
+  MX_OPAMP3_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */

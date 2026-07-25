@@ -55,11 +55,10 @@ void ADC34_cplt_isr(ADC_HandleTypeDef *hadc)
 void ADC_init(void)
 {
     HAL_OPAMP_Start(&hopamp1);
-    if(HAL_OPAMP_GetState(&hopamp1) != HAL_OPAMP_STATE_BUSY)
-    {
-        LOGI("ADC", "OPAMP已启动, 状态: %d", HAL_OPAMP_GetState(&hopamp1));
-    }
+    HAL_OPAMP_Start(&hopamp3);
+
     HAL_DAC_Start(&hdac3, DAC_CHANNEL_1);
+    HAL_DAC_Start(&hdac3, DAC_CHANNEL_2);
     dc_adc_queue = xQueueCreate(5, sizeof(uint32_t));
 
     /* ADC12: 交流侧 V+I, 30kHz 逐周期控制 */
