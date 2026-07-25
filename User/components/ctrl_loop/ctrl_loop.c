@@ -196,7 +196,7 @@ void ctrl_loop_init(void)
     now_vout_V = 0.0f;
     now_iout_A = 0.0f;
 
-    ctrl_loop_set_polarity_offset(8.64f);
+    ctrl_loop_set_polarity_offset(-1.0f);
 
     /* 创建控制任务 */
     xTaskCreate(ctrl_loop_routine, "CtrlLoop", 2048, NULL, 15, NULL);
