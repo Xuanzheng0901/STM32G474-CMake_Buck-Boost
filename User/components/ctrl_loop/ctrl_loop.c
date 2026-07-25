@@ -78,22 +78,24 @@ void ctrl_loop_ac_isr(uint32_t adc_word)
     int32_t v_raw = (int32_t)(adc_word & 0x0FFF);
     int32_t i_raw = (int32_t)(adc_word >> 16);
 
-    /* 归一化 */
-    float32_t v_inst = (float32_t)(v_raw - 2048) / 1365.33f;
-    float32_t i_inst = (float32_t)(i_raw - 2048) / 1365.33f;
+    /* SOGI-PLL: 归一化到 ~±1 */
+    float32_t v_sogi = (float32_t)(v_raw - 2048) / 1365.33f;
+    SPLL_1PH_SOGI_run(&spll, v_sogi);
 
-    /* SOGI-PLL: 更新电网相位 */
-    SPLL_1PH_SOGI_run(&spll, v_inst);
+    /* 实际物理量 + 滑动平均抗噪 */
+    static float32_t v_filt = 0.0f, i_filt = 0.0f;
+    float32_t v_inst = (float32_t)(v_raw - PFC_VIN_OFFSET) / PFC_VIN_LSB_PER_V;
+    float32_t i_inst = (float32_t)(i_raw - PFC_IIN_OFFSET) / PFC_IIN_LSB_PER_A;
+    v_filt = v_filt * 0.3f + v_inst * 0.7f;
+    i_filt = i_filt * 0.3f + i_inst * 0.7f;
 
-    /* 慢管相位偏移: cos_shifted = cos(θ + offset) = cosθ·cos_off - sinθ·sin_off */
+    /* 极性 + |cos| */
     float32_t cos_shifted = spll.cosine * pol_cos_off - spll.sine * pol_sin_off;
-
-    /* 电流参考跟踪 |cosθ| (不经偏移, 始终与电网电压同相) */
     uint8_t polarity = (cos_shifted >= 0.0f) ? 0 : 1;
     float32_t abs_cos = (spll.cosine >= 0.0f) ? spll.cosine : -spll.cosine;
 
-    /* PFC 电流内环 */
-    ctrl_loop_current_isr(v_inst, i_inst, now_vout_V,
+    /* 电流内环 */
+    ctrl_loop_current_isr(v_filt, i_filt, now_vout_V,
                           abs_cos, polarity);
 }
 
