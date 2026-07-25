@@ -109,6 +109,9 @@ void ctrl_loop_set_vout_cache(float32_t vout);
 void ctrl_loop_set_polarity_offset(float32_t deg);
 
 void ctrl_loop_set_current_pi(float32_t kp, float32_t ki);
-void ctrl_loop_set_voltage_pi(float32_t kp, float32_t ki);
+
+void ctrl_loop_set_voltage_pi(float32_t kp, float32_t ki, float32_t kd);
+
+void console_init(void);
 
 #endif /* __CTRL_LOOP_H__ */

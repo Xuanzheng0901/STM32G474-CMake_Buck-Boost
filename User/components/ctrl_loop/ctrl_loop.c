@@ -200,6 +200,7 @@ void ctrl_loop_init(void)
 
     /* 创建控制任务 */
     xTaskCreate(ctrl_loop_routine, "CtrlLoop", 2048, NULL, 15, NULL);
+    console_init();
 }
 
 CtrlLoop_State ctrl_loop_get_state(void)
@@ -332,21 +333,29 @@ void ctrl_loop_set_polarity_offset(float32_t deg)
 void ctrl_loop_set_current_pi(float32_t kp, float32_t ki)
 {
     pid_ctrl_parameter_t param = {
-        .kp           = kp, .ki                           = ki / PFC_PWM_FREQ, .kd = 0.0f,
-        .max_output   = PFC_I_OUTPUT_MAX, .min_output     = -PFC_I_OUTPUT_MAX,
-        .max_integral = PFC_I_INTEGRAL_MAX, .min_integral = -PFC_I_INTEGRAL_MAX,
+        .kp           = kp,
+        .ki           = ki / PFC_PWM_FREQ,
+        .kd           = 0.0f,
+        .max_output   = PFC_I_OUTPUT_MAX,
+        .min_output   = -PFC_I_OUTPUT_MAX,
+        .max_integral = PFC_I_INTEGRAL_MAX,
+        .min_integral = -PFC_I_INTEGRAL_MAX,
         .cal_type     = PID_CAL_TYPE_INCREMENTAL,
     };
     pid_update_parameters(i_pid, &param);
 }
 
-void ctrl_loop_set_voltage_pi(float32_t kp, float32_t ki)
+void ctrl_loop_set_voltage_pi(float32_t kp, float32_t ki, float32_t kd)
 {
     float v_ts = 1.0f / PFC_VOLTAGE_LOOP_FREQ;
     pid_ctrl_parameter_t param = {
-        .kp           = kp, .ki                           = ki * v_ts, .kd = 0.0f,
-        .max_output   = PFC_V_OUTPUT_MAX, .min_output     = 0.0f,
-        .max_integral = PFC_V_INTEGRAL_MAX, .min_integral = 0.0f,
+        .kp           = kp,
+        .ki           = ki * v_ts,
+        .kd           = kd,
+        .max_output   = PFC_V_OUTPUT_MAX,
+        .min_output   = 0.0f,
+        .max_integral = PFC_V_INTEGRAL_MAX,
+        .min_integral = 0.0f,
         .cal_type     = PID_CAL_TYPE_INCREMENTAL,
     };
     pid_update_parameters(v_pid, &param);
