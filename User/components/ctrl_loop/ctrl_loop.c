@@ -1,10 +1,10 @@
 /**
  * @file    ctrl_loop.c
- * @brief   图腾柱 PFC 控制回路 (双极性电流环)
+ * @brief   图腾柱 PFC 控制回路
  *
  * ── 电流内环 (30kHz ISR) ──
- *     Iref = I_amplitude × sin(ωt + φ)   (带符号)
- *     Duty = D_ideal + PI(Iref - IL)     (PI 双向输出)
+ *     Iref = I_amplitude × |sin(ωt + φ)|
+ *     Duty = D_ideal + PI(|Iref| - |IL|)
  *
  * ── 电压外环 (~100Hz 任务) ──
  *     状态机 → Vref → PI(Vref - Vout) → I_amplitude
@@ -77,12 +77,12 @@ void ctrl_loop_ac_isr(uint32_t adc_word)
     /* 慢桥臂极性 (基于电压过零) */
     uint8_t polarity = (spll.cosine * pol_cos_off >= spll.sine * pol_sin_off) ? 0 : 1;
 
-    /* 电流参考: i_amplitude × sin(ωt + φ), 带符号.
-     * PF=1 时 ref_wave = cosine ≈ sin(ωt), 等同于原逻辑 */
+    /* ref_wave = sin(ωt + φ), signed → |ref_wave| 幅值, sign(ref_wave) 反馈符号 */
     float32_t ref_wave = spll.cosine * pf_cos_phi - spll.sine * pf_sin_phi;
-    float32_t i_ref    = i_amplitude * ref_wave;
+    float32_t abs_ref  = fabsf(ref_wave);
+    uint8_t   i_sign   = (ref_wave >= 0.0f) ? 0 : 1;
 
-    ctrl_loop_current_isr(v_filt, i_filt, now_vout_V, i_ref, polarity);
+    ctrl_loop_current_isr(v_filt, i_filt, now_vout_V, abs_ref, polarity, i_sign);
 }
 
 /* ==================== DC 数据处理 (任务上下文) ==================== */
@@ -168,8 +168,8 @@ CtrlLoop_State ctrl_loop_get_state(void)
 /* ---- 电流内环 (30kHz ISR) ---- */
 
 void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
-                           float32_t vout, float32_t i_ref,
-                           uint8_t polarity)
+                           float32_t vout, float32_t abs_ref,
+                           uint8_t polarity, uint8_t i_sign)
 {
     /* 慢桥臂: 基于电压过零换向 */
     if (polarity != hw_polarity) {
@@ -180,9 +180,10 @@ void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
     if (vout < 3.0f) {
         duty_current = 0.0f;
     } else {
-        /* 双极性电流环: 参考和反馈均带符号, PI 双向调节 */
+        float i_ref = i_amplitude * abs_ref;
+        float i_fb  = (i_sign == 0) ? il_inst : -il_inst;
         float i_corr;
-        pid_compute(i_pid, i_ref - il_inst, &i_corr);
+        pid_compute(i_pid, i_ref - i_fb, &i_corr);
         duty_current = pfc_calc_ideal_duty(vin_inst, vout) + i_corr;
     }
 
