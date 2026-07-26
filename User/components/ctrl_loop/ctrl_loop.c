@@ -34,11 +34,11 @@ static pid_ctrl_block_handle_t v_pid;   /* 电压外环 PID */
 
 static float32_t i_amplitude;           /* 电流参考幅值 */
 static float32_t duty_current;          /* 当前占空比 */
-static uint8_t  hw_polarity;            /* 上次写入硬件的极性 */
-static float32_t pol_cos_off  = 1.0f;   /* cos(offset) */
-static float32_t pol_sin_off  = 0.0f;   /* sin(offset) */
-static float32_t pf_cos_phi   = 1.0f;   /* cos(φ), PF 相位偏移 (1=unity) */
-static float32_t pf_sin_phi   = 0.0f;   /* sin(φ), PF 相位偏移 */
+static uint8_t hw_polarity;            /* 上次写入硬件的极性 */
+static float32_t pol_cos_off = 1.0f;   /* cos(offset) */
+static float32_t pol_sin_off = 0.0f;   /* sin(offset) */
+static float32_t pf_cos_phi = 1.0f;   /* cos(φ), PF 相位偏移 (1=unity) */
+static float32_t pf_sin_phi = 0.0f;   /* sin(φ), PF 相位偏移 */
 
 static float now_vout_V;                /* DC 输出电压 (V) */
 static float now_iout_A;                /* DC 输出电流 (A) */
@@ -80,9 +80,9 @@ void ctrl_loop_ac_isr(uint32_t adc_word)
     /* ref_wave = sin(ωt + φ). |ref_wave|→幅值, sign→反馈符号,
      * sign(v_filt)×sign(ref_wave)<0 → 反向功率 → 切换 Buck 前馈 */
     float32_t ref_wave = spll.cosine * pf_cos_phi - spll.sine * pf_sin_phi;
-    float32_t abs_ref  = fabsf(ref_wave);
-    uint8_t   i_sign   = (ref_wave >= 0.0f) ? 0 : 1;
-    uint8_t   reverse  = (v_filt * ref_wave < 0.0f) ? 1 : 0;
+    float32_t abs_ref = fabsf(ref_wave);
+    uint8_t i_sign = (ref_wave >= 0.0f) ? 0 : 1;
+    uint8_t reverse = (v_filt * ref_wave < 0.0f) ? 1 : 0;
 
     ctrl_loop_current_isr(v_filt, i_filt, now_vout_V, abs_ref, polarity, i_sign, reverse);
 }
@@ -94,7 +94,8 @@ static void dc_data_process(uint32_t *buf)
     uint16_t len = ADC_BUFFER_LENGTH / 2;
     uint32_t v_sum = 0, i_sum = 0;
 
-    for (uint16_t j = 0; j < len; j++) {
+    for(uint16_t j = 0; j < len; j++)
+    {
         v_sum += (buf[j] & 0x0FFF);
         i_sum += (buf[j] >> 16);
     }
@@ -104,7 +105,8 @@ static void dc_data_process(uint32_t *buf)
 
     /* 状态机更新 (含故障检测) → Vref */
     float32_t vref = ctrl_loop_state_update(now_vout_V, now_iout_A);
-    if (ctrl_loop_state_get() == CTRL_STATE_FAULT) {
+    if(ctrl_loop_state_get() == CTRL_STATE_FAULT)
+    {
         i_amplitude = 0.0f;
         return;
     }
@@ -120,8 +122,9 @@ static void dc_data_process(uint32_t *buf)
 static void ctrl_loop_routine(void *pvParameters)
 {
     uint32_t *buf;
-    while (1) {
-        if (xQueueReceive(ADC_get_dc_queue(), &buf, portMAX_DELAY) == pdTRUE)
+    while(1)
+    {
+        if(xQueueReceive(ADC_get_dc_queue(), &buf, portMAX_DELAY) == pdTRUE)
             dc_data_process(buf);
     }
 }
@@ -133,7 +136,7 @@ void ctrl_loop_init(void)
     /* 电流内环 PI */
     pid_ctrl_parameter_t i_param = I_PID_CFG(PFC_I_KP_DEFAULT,
                                              PFC_I_KI_DEFAULT / PFC_PWM_FREQ);
-    pid_ctrl_config_t i_cfg = { .init_param = i_param };
+    pid_ctrl_config_t i_cfg = {.init_param = i_param};
     pid_new_control_block(&i_cfg, &i_pid);
 
     /* 电压外环 PID */
@@ -141,7 +144,7 @@ void ctrl_loop_init(void)
     pid_ctrl_parameter_t v_param = V_PID_CFG(PFC_V_KP_DEFAULT,
                                              PFC_V_KI_DEFAULT * v_ts,
                                              PFC_V_KD_DEFAULT);
-    pid_ctrl_config_t v_cfg = { .init_param = v_param };
+    pid_ctrl_config_t v_cfg = {.init_param = v_param};
     pid_new_control_block(&v_cfg, &v_pid);
 
     /* 状态机 */
@@ -154,7 +157,7 @@ void ctrl_loop_init(void)
     now_vout_V = 0.0f;
     now_iout_A = 0.0f;
 
-    ctrl_loop_set_polarity_offset(-1.0f);
+    ctrl_loop_set_polarity_offset(0.0f);
 
     /* 慢桥臂初始安全态: 双管关闭, 体二极管充当整流 */
     pfc_set_polarity(0);
@@ -174,24 +177,28 @@ void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
                            uint8_t polarity, uint8_t i_sign, uint8_t reverse)
 {
     /* 慢桥臂: 基于电压过零换向 */
-    if (polarity != hw_polarity) {
+    if(polarity != hw_polarity)
+    {
         pfc_set_polarity(polarity);
         hw_polarity = polarity;
     }
 
-    if (vout < 3.0f) {
+    if(vout < 3.0f)
+    {
         duty_current = 0.0f;
-    } else {
+    }
+    else
+    {
         float i_ref = i_amplitude * abs_ref;
-        float i_fb  = (i_sign == 0) ? il_inst : -il_inst;
+        float i_fb = (i_sign == 0) ? il_inst : -il_inst;
         float i_corr;
         pid_compute(i_pid, i_ref - i_fb, &i_corr);
 
         /* 前馈: 正向功率→Boost, 反向功率→Buck (同步整流主导) */
         float vin_abs = fabsf(vin_inst);
         float ff = reverse
-            ? vin_abs / vout                    /* Buck: DC→AC */
-            : 1.0f - vin_abs / vout;            /* Boost: AC→DC */
+                       ? vin_abs / vout                    /* Buck: DC→AC */
+                       : 1.0f - vin_abs / vout;            /* Boost: AC→DC */
         duty_current = ff + i_corr;
     }
 
@@ -242,10 +249,12 @@ void ctrl_loop_set_pf(float32_t pf)
     /* pf = cos(φ): -1~1, 正=容性(超前), 负=感性(滞后)
      * cos_phi = |pf|,  sin_phi = sign(pf) × √(1-pf²) */
     float32_t abs_pf = fabsf(pf);
-    if (abs_pf > 1.0f) abs_pf = 1.0f;
+    if(abs_pf > 1.0f)
+        abs_pf = 1.0f;
     pf_cos_phi = abs_pf;
     arm_sqrt_f32(1.0f - abs_pf * abs_pf, &pf_sin_phi);
-    if (pf < 0.0f) pf_sin_phi = -pf_sin_phi;
+    if(pf < 0.0f)
+        pf_sin_phi = -pf_sin_phi;
 }
 
 float32_t ctrl_loop_get_pf(void)
@@ -255,8 +264,27 @@ float32_t ctrl_loop_get_pf(void)
 
 /* ---- Getter ---- */
 
-float32_t ctrl_loop_get_vref(void)       { return ctrl_loop_state_get_vref(); }
-float32_t ctrl_loop_get_voltage(void)    { return now_vout_V; }
-float32_t ctrl_loop_get_current(void)    { return now_iout_A; }
-float32_t ctrl_loop_get_i_amplitude(void){ return i_amplitude; }
-float32_t ctrl_loop_get_duty(void)       { return duty_current; }
+float32_t ctrl_loop_get_vref(void)
+{
+    return ctrl_loop_state_get_vref();
+}
+
+float32_t ctrl_loop_get_voltage(void)
+{
+    return now_vout_V;
+}
+
+float32_t ctrl_loop_get_current(void)
+{
+    return now_iout_A;
+}
+
+float32_t ctrl_loop_get_i_amplitude(void)
+{
+    return i_amplitude;
+}
+
+float32_t ctrl_loop_get_duty(void)
+{
+    return duty_current;
+}
