@@ -23,8 +23,15 @@ static inline void ac_isr(uint32_t adc_word)
     ctrl_loop_ac_isr(adc_word);
 }
 
-void ADC1_half_cplt_isr(ADC_HandleTypeDef *hadc) { ac_isr(ac_adc_buf[0]); }
-void ADC1_cplt_isr(ADC_HandleTypeDef *hadc)      { ac_isr(ac_adc_buf[1]); }
+void ADC1_half_cplt_isr(ADC_HandleTypeDef *hadc)
+{
+    ac_isr(ac_adc_buf[0]);
+}
+
+void ADC1_cplt_isr(ADC_HandleTypeDef *hadc)
+{
+    ac_isr(ac_adc_buf[1]);
+}
 
 /* ---- ADC34 直流侧 ISR: 发队列 ---- */
 
@@ -36,8 +43,15 @@ static inline void dc_isr(uint16_t offset)
     portYIELD_FROM_ISR(woke);
 }
 
-void ADC34_half_cplt_isr(ADC_HandleTypeDef *hadc) { dc_isr(0); }
-void ADC34_cplt_isr(ADC_HandleTypeDef *hadc)      { dc_isr(ADC_BUFFER_LENGTH / 2); }
+void ADC34_half_cplt_isr(ADC_HandleTypeDef *hadc)
+{
+    dc_isr(0);
+}
+
+void ADC34_cplt_isr(ADC_HandleTypeDef *hadc)
+{
+    dc_isr(ADC_BUFFER_LENGTH / 2);
+}
 
 /* ---- 初始化 ---- */
 
