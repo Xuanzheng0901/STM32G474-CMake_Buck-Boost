@@ -20,9 +20,9 @@ CtrlLoop_State ctrl_loop_get_state(void);
 void ctrl_loop_ac_isr(uint32_t adc_word);
 
 /* 电流内环 (30kHz ISR)
- * polarity: 慢桥臂 (电压过零), i_sign: 电流反馈符号 (电流参考过零) */
+ * polarity: 慢桥臂, i_sign: 反馈符号, reverse: 反向功率→Buck前馈 */
 void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst, float32_t vout,
-                           float32_t abs_ref, uint8_t polarity, uint8_t i_sign);
+                           float32_t abs_ref, uint8_t polarity, uint8_t i_sign, uint8_t reverse);
 
 /* 设置目标输出电压, 自动触发软启动过渡 */
 void ctrl_loop_set_vout(float32_t vout);

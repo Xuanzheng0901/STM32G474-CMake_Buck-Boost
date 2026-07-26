@@ -77,12 +77,14 @@ void ctrl_loop_ac_isr(uint32_t adc_word)
     /* 慢桥臂极性 (基于电压过零) */
     uint8_t polarity = (spll.cosine * pol_cos_off >= spll.sine * pol_sin_off) ? 0 : 1;
 
-    /* ref_wave = sin(ωt + φ), signed → |ref_wave| 幅值, sign(ref_wave) 反馈符号 */
+    /* ref_wave = sin(ωt + φ). |ref_wave|→幅值, sign→反馈符号,
+     * sign(v_filt)×sign(ref_wave)<0 → 反向功率 → 切换 Buck 前馈 */
     float32_t ref_wave = spll.cosine * pf_cos_phi - spll.sine * pf_sin_phi;
     float32_t abs_ref  = fabsf(ref_wave);
     uint8_t   i_sign   = (ref_wave >= 0.0f) ? 0 : 1;
+    uint8_t   reverse  = (v_filt * ref_wave < 0.0f) ? 1 : 0;
 
-    ctrl_loop_current_isr(v_filt, i_filt, now_vout_V, abs_ref, polarity, i_sign);
+    ctrl_loop_current_isr(v_filt, i_filt, now_vout_V, abs_ref, polarity, i_sign, reverse);
 }
 
 /* ==================== DC 数据处理 (任务上下文) ==================== */
@@ -169,7 +171,7 @@ CtrlLoop_State ctrl_loop_get_state(void)
 
 void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
                            float32_t vout, float32_t abs_ref,
-                           uint8_t polarity, uint8_t i_sign)
+                           uint8_t polarity, uint8_t i_sign, uint8_t reverse)
 {
     /* 慢桥臂: 基于电压过零换向 */
     if (polarity != hw_polarity) {
@@ -184,7 +186,13 @@ void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
         float i_fb  = (i_sign == 0) ? il_inst : -il_inst;
         float i_corr;
         pid_compute(i_pid, i_ref - i_fb, &i_corr);
-        duty_current = pfc_calc_ideal_duty(vin_inst, vout) + i_corr;
+
+        /* 前馈: 正向功率→Boost, 反向功率→Buck (同步整流主导) */
+        float vin_abs = fabsf(vin_inst);
+        float ff = reverse
+            ? vin_abs / vout                    /* Buck: DC→AC */
+            : 1.0f - vin_abs / vout;            /* Boost: AC→DC */
+        duty_current = ff + i_corr;
     }
 
 #if PFC_DEBUG_DAC_OUTPUT

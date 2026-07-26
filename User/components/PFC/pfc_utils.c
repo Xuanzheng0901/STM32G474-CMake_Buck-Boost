@@ -71,6 +71,6 @@ void pfc_set_polarity(uint8_t polarity)
         HAL_HRTIM_WaveformSetOutputLevel(&hhrtim1, HRTIM_TIMERINDEX_TIMER_B, HRTIM_OUTPUT_TB1,
                                          HRTIM_OUTPUTLEVEL_INACTIVE);
         HAL_HRTIM_WaveformSetOutputLevel(&hhrtim1, HRTIM_TIMERINDEX_TIMER_B, HRTIM_OUTPUT_TB2,
-                                         HRTIM_OUTPUTLEVEL_INACTIVE);
+                                         HRTIM_OUTPUTLEVEL_ACTIVE);
     }
 }
