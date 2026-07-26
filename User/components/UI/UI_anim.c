@@ -3,7 +3,6 @@
 
 extern lv_group_t *group;
 extern lv_obj_t *voltage_spinbox;
-extern lv_obj_t *current_spinbox;
 
 
 lv_obj_t *highlight_frame = NULL;
@@ -11,7 +10,7 @@ lv_anim_t focus_anim;
 bool is_animating = false;
 
 static const focus_anim_config_t anim_config = {
-    .spinbox_x      = 34,
+    .spinbox_x      = 24,
     .spinbox_width  = 35,
     .spinbox1_x     = 91,
     .spinbox1_width = 29
@@ -46,11 +45,6 @@ static void focus_sync_anim_exec_cb(void *var, int32_t v)
             target_x = anim_config.spinbox_x;
             target_width = anim_config.spinbox_width;
         }
-        else if(focused_obj == current_spinbox)
-        {
-            target_x = anim_config.spinbox1_x;
-            target_width = anim_config.spinbox1_width;
-        }
     }
 
     // 计算当前位置
@@ -59,12 +53,6 @@ static void focus_sync_anim_exec_cb(void *var, int32_t v)
     {
         // 从右向左收缩
         current_x = target_x + (initial_width - v);
-    }
-    else if(focused_obj == current_spinbox && initial_x < target_x)
-    {
-        // 从左向右收缩
-        float progress = (float)(initial_width - v) / (initial_width - target_width);
-        current_x = initial_x + (target_x - initial_x) * progress;
     }
     else
     {
@@ -118,11 +106,6 @@ static void get_target_config(lv_obj_t *obj, lv_coord_t *target_x, lv_coord_t *t
         *target_x = anim_config.spinbox_x;
         *target_width = anim_config.spinbox_width;
     }
-    else if(obj == current_spinbox)
-    {
-        *target_x = anim_config.spinbox1_x;
-        *target_width = anim_config.spinbox1_width;
-    }
 }
 
 static void focus_anim_ready_cb(lv_anim_t *a)
@@ -140,8 +123,7 @@ static void focus_anim_ready_cb(lv_anim_t *a)
         lv_coord_t current_width = lv_obj_get_width(highlight_frame);
 
         // 判断是否需要同步位置宽度动画
-        bool need_sync_anim = (focused_obj == voltage_spinbox && current_x < target_x) ||
-                              (focused_obj == current_spinbox && current_x < target_x);
+        bool need_sync_anim = (focused_obj == voltage_spinbox && current_x < target_x);
 
         if(need_sync_anim)
         {
@@ -198,12 +180,6 @@ void focus_event_cb(lv_event_t *e)
             // 从右向左切换：向左扩展
             expand_width = current_x - target_x + current_width;
             expand_callback = focus_expand_left_exec_cb;
-        }
-        else if(obj == current_spinbox && current_x < target_x)
-        {
-            // 从左向右切换：向右扩展
-            expand_width = target_x - current_x + target_width;
-            expand_callback = focus_anim_exec_cb;
         }
 
         // 执行扩展动画
