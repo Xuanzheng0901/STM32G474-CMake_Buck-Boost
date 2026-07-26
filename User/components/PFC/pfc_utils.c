@@ -60,7 +60,7 @@ void pfc_write_duty(float32_t duty, uint8_t polarity)
  */
 void pfc_set_polarity(uint8_t polarity)
 {
-    if(polarity == 0)
+    if(polarity == 0) //正半周
     {
         HAL_HRTIM_WaveformSetOutputLevel(&hhrtim1, HRTIM_TIMERINDEX_TIMER_B, HRTIM_OUTPUT_TB1,HRTIM_OUTPUTLEVEL_ACTIVE);
         HAL_HRTIM_WaveformSetOutputLevel(&hhrtim1, HRTIM_TIMERINDEX_TIMER_B, HRTIM_OUTPUT_TB2,
