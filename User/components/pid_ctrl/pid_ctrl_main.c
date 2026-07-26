@@ -10,9 +10,7 @@
 
 extern QueueHandle_t adc_queue;
 
-static pid_ctrl_block_handle_t a_pid_handle = NULL;
-static pid_ctrl_block_handle_t b_pid_handle = NULL;
-static pid_ctrl_block_handle_t c_pid_handle = NULL;
+static pid_ctrl_block_handle_t pid_handle[3];
 QueueHandle_t pid_ctrl_queue_mV = NULL; //单位为mV
 float now_voltage_mV[3] = {0.0f}; // [0]=Va, [1]=Vb, [2]=Vc (mV)
 float now_current_A[3] = {0.0f}; // [0]=Ia, [1]=Ib, [2]=Ic (A)
@@ -206,22 +204,43 @@ static void adc_data_process(uint32_t *adc12_data, uint16_t *adc3_data)
 #define SAMPLE_COUNT (ADC_BUFFER_LENGTH / 4)
 
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_SET);
-    // 提取原始ADC值到浮点数组
-    float32_t raw_v[3][SAMPLE_COUNT];
-    float32_t raw_i[3][SAMPLE_COUNT];
+
+    // 整数累加器: 单次遍历提取 ADC 值并累加 sum / sum_sq
+    // 消除原来 2400 字节的二维浮点数组和 12 次 CMSIS-DSP 遍历
+    int64_t sum_v[3] = {0};
+    int64_t sum_i[3] = {0};
+    int64_t sum_sq_v[3] = {0};
+    int64_t sum_sq_i[3] = {0};
 
     for(uint16_t i = 0; i < SAMPLE_COUNT; i++)
     {
+        int32_t raw;
+
         // Rank1: 电压
-        raw_v[0][i] = (float32_t)(adc12_data[2 * i] & 0x0FFF);         // ADC1 → Va
-        raw_v[1][i] = (float32_t)((adc12_data[2 * i] >> 16) & 0x0FFF); // ADC2 → Vb
-        raw_v[2][i] = (float32_t)(adc3_data[2 * i] & 0x0FFF);           // ADC3 → Vc
+        raw = (int32_t)(adc12_data[2 * i] & 0x0FFF);
+        sum_v[0] += raw;
+        sum_sq_v[0] += (int64_t)raw * raw;
+        raw = (int32_t)((adc12_data[2 * i] >> 16) & 0x0FFF);
+        sum_v[1] += raw;
+        sum_sq_v[1] += (int64_t)raw * raw;
+        raw = (int32_t)(adc3_data[2 * i] & 0x0FFF);
+        sum_v[2] += raw;
+        sum_sq_v[2] += (int64_t)raw * raw;
 
         // Rank2: 电流
-        raw_i[0][i] = (float32_t)(adc12_data[2 * i + 1] & 0x0FFF);         // ADC1 → Ia
-        raw_i[1][i] = (float32_t)((adc12_data[2 * i + 1] >> 16) & 0x0FFF); // ADC2 → Ib
-        raw_i[2][i] = (float32_t)(adc3_data[2 * i + 1] & 0x0FFF);           // ADC3 → Ic
+        raw = (int32_t)(adc12_data[2 * i + 1] & 0x0FFF);
+        sum_i[0] += raw;
+        sum_sq_i[0] += (int64_t)raw * raw;
+        raw = (int32_t)((adc12_data[2 * i + 1] >> 16) & 0x0FFF);
+        sum_i[1] += raw;
+        sum_sq_i[1] += (int64_t)raw * raw;
+        raw = (int32_t)(adc3_data[2 * i + 1] & 0x0FFF);
+        sum_i[2] += raw;
+        sum_sq_i[2] += (int64_t)raw * raw;
     }
+
+    // 预计算倒数，用乘法替代 6 次除法
+    const float inv_N = 1.0f / (float)SAMPLE_COUNT;
 
     // 电压/电流 RMS 系数
     // V: 3000mV / 4095 * 39.25 ≈ 28.5
@@ -229,28 +248,29 @@ static void adc_data_process(uint32_t *adc12_data, uint16_t *adc3_data)
 #define V_RMS_COEF (28.5f)
 #define I_RMS_COEF (0.007326007f)
 
-    float32_t mean, power, variance;
-
-    // 逐相计算 AC RMS 并卡尔曼滤波
+    // 一次性转浮点计算 RMS + 卡尔曼滤波
     for(uint8_t ph = 0; ph < 3; ph++)
     {
         // --- 电压: Var = SumSq/N - Mean² ---
-        arm_mean_f32(raw_v[ph], SAMPLE_COUNT, &mean);
-        arm_power_f32(raw_v[ph], SAMPLE_COUNT, &power);
-        variance = power / (float32_t)SAMPLE_COUNT - mean * mean;
+        float f_sum = (float)sum_v[ph];
+        float f_sq = (float)sum_sq_v[ph];
+        float mean = f_sum * inv_N;
+        float variance = f_sq * inv_N - mean * mean;
         if(variance < 0.0f)
             variance = 0.0f;
-        arm_sqrt_f32(variance, &mean); // 复用 mean 存放 stddev
-        float raw_voltage_mV = mean * V_RMS_COEF;
+        float rms;
+        arm_sqrt_f32(variance, &rms);
+        float raw_voltage_mV = rms * V_RMS_COEF;
 
         // --- 电流 ---
-        arm_mean_f32(raw_i[ph], SAMPLE_COUNT, &mean);
-        arm_power_f32(raw_i[ph], SAMPLE_COUNT, &power);
-        variance = power / (float32_t)SAMPLE_COUNT - mean * mean;
+        f_sum = (float)sum_i[ph];
+        f_sq = (float)sum_sq_i[ph];
+        mean = f_sum * inv_N;
+        variance = f_sq * inv_N - mean * mean;
         if(variance < 0.0f)
             variance = 0.0f;
-        arm_sqrt_f32(variance, &mean);
-        float raw_current_A = mean * I_RMS_COEF;
+        arm_sqrt_f32(variance, &rms);
+        float raw_current_A = rms * I_RMS_COEF;
 
         if(!is_kf_initialized)
         {
@@ -262,7 +282,6 @@ static void adc_data_process(uint32_t *adc12_data, uint16_t *adc3_data)
         now_current_A[ph] = kalman_1d_update(&kf_current[ph], raw_current_A);
     }
 
-    // 三组滤波器的初始状态一次性置位（仅首次执行后）
     if(!is_kf_initialized)
         is_kf_initialized = 1;
 
@@ -277,10 +296,10 @@ static void PID_ctrl_routine(void *pvParameters)
     static uint32_t target_voltage_mV = 0;
     static uint32_t target_voltage_buffer_mV = 0;
 
-    static float output = 0.0f;
+    static float output[3];
 
     static adc_dma_block_t dma_block;
-    set_mod_ratio_by_factor(0.95f, 0.95f, 0.95f);
+    set_mod_ratio_by_factor(0.0f, 0.0f, 0.0f);
     while(1)
     {
         //1. 等待ADC数据
@@ -295,16 +314,21 @@ static void PID_ctrl_routine(void *pvParameters)
                     // pid_reset_ctrl_block(pid_handle); //使用增量式pid更改target后不能重置
                 }
             }
+
+            //3. adc数据处理
             adc_data_process(dma_block.adc12_half, dma_block.adc3_half);
-            //
+
             //4. 进行pid计算
-            // float error_mV = (float)target_voltage_mV - now_voltage_mV;
-            //
-            // pid_compute(pid_handle, error_mV, &output);
-            // if(output < 0.01f)
-            //     output = 0.0f;
-            // set_mod_ratio_by_factor(output);
-            // LOGI("PID", "output: %.6f", output);
+            for(uint8_t ph = 0; ph < 3; ph++)
+            {
+                float error_mV = target_voltage_mV - now_voltage_mV[ph];
+                pid_compute(pid_handle[ph], error_mV, &output[ph]);
+                if(output[ph] < 0.0f)
+                    output[ph] = 0.0f;
+            }
+            set_mod_ratio_by_factor(output[0], output[1], output[2]);
+
+            LOGI("PID", "output: %.2f %.2f %.2f", output[0], output[1], output[2]);
             HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
         }
     }
@@ -331,9 +355,8 @@ void pid_ctrl_init(void)
             .cal_type     = PID_CAL_TYPE_INCREMENTAL,
         }
     };
-    pid_new_control_block(&pid_cfg, &a_pid_handle);
-    pid_new_control_block(&pid_cfg, &b_pid_handle);
-    pid_new_control_block(&pid_cfg, &c_pid_handle);
+    for(uint8_t ph = 0; ph < 3; ph++)
+        pid_new_control_block(&pid_cfg, &pid_handle[ph]);
     pid_ctrl_queue_mV = xQueueCreate(6, sizeof(uint32_t));
     xTaskCreate(PID_ctrl_routine, "PID", 4096, NULL, 15, NULL);
     pid_set_voltage(0);
