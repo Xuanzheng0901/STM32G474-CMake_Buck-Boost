@@ -80,6 +80,9 @@ void HardFault_HandlerC(uint32_t *hardfault_args)
 
 /* External variables --------------------------------------------------------*/
 extern DMA_HandleTypeDef hdma_adc1;
+extern DMA_HandleTypeDef hdma_adc3;
+extern ADC_HandleTypeDef hadc1;
+extern ADC_HandleTypeDef hadc2;
 extern HRTIM_HandleTypeDef hhrtim1;
 extern DMA_HandleTypeDef hdma_spi1_tx;
 extern SPI_HandleTypeDef hspi1;
@@ -212,6 +215,20 @@ void DMA1_Channel1_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles DMA1 channel2 global interrupt.
+  */
+void DMA1_Channel2_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Channel2_IRQn 0 */
+
+  /* USER CODE END DMA1_Channel2_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_adc3);
+  /* USER CODE BEGIN DMA1_Channel2_IRQn 1 */
+
+  /* USER CODE END DMA1_Channel2_IRQn 1 */
+}
+
+/**
   * @brief This function handles DMA1 channel3 global interrupt.
   */
 void DMA1_Channel3_IRQHandler(void)
@@ -237,6 +254,21 @@ void DMA1_Channel4_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Channel4_IRQn 1 */
 
   /* USER CODE END DMA1_Channel4_IRQn 1 */
+}
+
+/**
+  * @brief This function handles ADC1 and ADC2 global interrupt.
+  */
+void ADC1_2_IRQHandler(void)
+{
+  /* USER CODE BEGIN ADC1_2_IRQn 0 */
+
+  /* USER CODE END ADC1_2_IRQn 0 */
+  HAL_ADC_IRQHandler(&hadc1);
+  HAL_ADC_IRQHandler(&hadc2);
+  /* USER CODE BEGIN ADC1_2_IRQn 1 */
+
+  /* USER CODE END ADC1_2_IRQn 1 */
 }
 
 /**
