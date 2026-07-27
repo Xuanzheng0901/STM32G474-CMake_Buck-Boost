@@ -18,4 +18,6 @@ void pid_ctrl_init(void);
 
 void pid_set_voltage(uint32_t mv);
 
+void pid_set_param(float kp, float ki, float kd);
+
 #endif //G474_1_PID_H

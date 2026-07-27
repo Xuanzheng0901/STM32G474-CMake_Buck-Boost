@@ -34,6 +34,8 @@ void app_main(void)
     ui_init();
     pid_ctrl_init();
     ADC_init();
+    void console_init(void);
+    console_init();
 
     HAL_HRTIM_WaveformCountStart(
         &hhrtim1,

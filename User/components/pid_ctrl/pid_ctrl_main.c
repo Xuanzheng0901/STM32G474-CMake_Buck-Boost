@@ -328,7 +328,7 @@ static void PID_ctrl_routine(void *pvParameters)
             }
             set_mod_ratio_by_factor(output[0], output[1], output[2]);
 
-            LOGI("PID", "output: %.2f %.2f %.2f", output[0], output[1], output[2]);
+            // LOGI("PID", "output: %.2f %.2f %.2f", output[0], output[1], output[2]);
             HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
         }
     }
@@ -341,6 +341,22 @@ void pid_set_voltage(uint32_t mv)
     xQueueSend(pid_ctrl_queue_mV, &mv, portMAX_DELAY);
 }
 
+void pid_set_param(float kp, float ki, float kd)
+{
+    pid_ctrl_parameter_t param = {
+        .kp           = kp,
+        .ki           = ki,
+        .kd           = kd,
+        .max_output   = 0.98,
+        .min_output   = 1000.0f,
+        .max_integral = -1000.0f,
+        .min_integral = 0.0f,
+        .cal_type     = PID_CAL_TYPE_INCREMENTAL,
+    };
+    for(uint8_t ph = 0; ph < 3; ph++)
+        pid_update_parameters(pid_handle[ph], &param);
+}
+
 void pid_ctrl_init(void)
 {
     pid_ctrl_config_t pid_cfg = {
@@ -348,10 +364,10 @@ void pid_ctrl_init(void)
             .kp           = 0.00005f,
             .ki           = 0.000005f,
             .kd           = 0.00006f,
-            .max_output   = 0.96f,
+            .max_output   = 0.98f,
             .min_output   = 0.0f,
-            .max_integral = 1000000.0f,
-            .min_integral = -1000000.0f,
+            .max_integral = 1000.0f,
+            .min_integral = -1000.0f,
             .cal_type     = PID_CAL_TYPE_INCREMENTAL,
         }
     };
