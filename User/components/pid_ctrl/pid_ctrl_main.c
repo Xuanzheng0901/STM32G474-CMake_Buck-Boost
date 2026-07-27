@@ -311,7 +311,8 @@ static void PID_ctrl_routine(void *pvParameters)
                 if(target_voltage_mV != target_voltage_buffer_mV)
                 {
                     target_voltage_mV = target_voltage_buffer_mV;
-                    // pid_reset_ctrl_block(pid_handle); //使用增量式pid更改target后不能重置
+                    // for(uint8_t ph = 0; ph < 3; ph++)
+                    // pid_reset_ctrl_block(pid_handle[ph]); //使用增量式pid更改target后不能重置
                 }
             }
 
@@ -321,14 +322,14 @@ static void PID_ctrl_routine(void *pvParameters)
             //4. 进行pid计算
             for(uint8_t ph = 0; ph < 3; ph++)
             {
-                float error_mV = target_voltage_mV - now_voltage_mV[ph];
+                float error_mV = (float)target_voltage_mV - now_voltage_mV[ph];
                 pid_compute(pid_handle[ph], error_mV, &output[ph]);
                 if(output[ph] < 0.0f)
                     output[ph] = 0.0f;
             }
             set_mod_ratio_by_factor(output[0], output[1], output[2]);
 
-            // LOGI("PID", "output: %.2f %.2f %.2f", output[0], output[1], output[2]);
+            LOGI("PID", "%.3f, %.3f, %.3f", output[0], output[1], output[2]);
             HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
         }
     }
@@ -347,11 +348,11 @@ void pid_set_param(float kp, float ki, float kd)
         .kp           = kp,
         .ki           = ki,
         .kd           = kd,
-        .max_output   = 0.98,
-        .min_output   = 1000.0f,
-        .max_integral = -1000.0f,
-        .min_integral = 0.0f,
-        .cal_type     = PID_CAL_TYPE_INCREMENTAL,
+        .max_output   = 0.98f,
+        .min_output   = 0.0f,
+        .max_integral = 100000.0f,
+        .min_integral = -100000.0f,
+        .cal_type     = PID_CAL_TYPE_POSITIONAL,
     };
     for(uint8_t ph = 0; ph < 3; ph++)
         pid_update_parameters(pid_handle[ph], &param);
@@ -361,19 +362,23 @@ void pid_ctrl_init(void)
 {
     pid_ctrl_config_t pid_cfg = {
         .init_param = {
-            .kp           = 0.00005f,
-            .ki           = 0.000005f,
-            .kd           = 0.00006f,
+            .kp           = 0.0001f,
+            .ki           = 0.000012f,
+            .kd           = 0.00005f,
             .max_output   = 0.98f,
             .min_output   = 0.0f,
-            .max_integral = 1000.0f,
-            .min_integral = -1000.0f,
-            .cal_type     = PID_CAL_TYPE_INCREMENTAL,
+            .max_integral = 100000.0f,
+            .min_integral = -100000.0f,
+            .cal_type     = PID_CAL_TYPE_POSITIONAL,
         }
     };
     for(uint8_t ph = 0; ph < 3; ph++)
+    {
         pid_new_control_block(&pid_cfg, &pid_handle[ph]);
+        pid_reset_ctrl_block(pid_handle[ph]);
+    }
+
     pid_ctrl_queue_mV = xQueueCreate(6, sizeof(uint32_t));
-    xTaskCreate(PID_ctrl_routine, "PID", 4096, NULL, 15, NULL);
+    xTaskCreate(PID_ctrl_routine, "PID", 2048, NULL, 15, NULL);
     pid_set_voltage(0);
 }
