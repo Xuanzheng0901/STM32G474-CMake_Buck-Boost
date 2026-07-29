@@ -96,7 +96,6 @@ static void ctrl_loop_enter_slow_blank(void)
 static uint8_t ctrl_loop_slow_polarity_ready(float32_t vin_inst,
                                              uint8_t pll_polarity)
 {
-
     if(comm_blank_cycles < PFC_ZC_BLANK_CYCLES)
         comm_blank_cycles++;
 
@@ -139,6 +138,8 @@ void ctrl_loop_ac_isr(uint32_t adc_word)
     int32_t v_raw = (int32_t)(adc_word & 0x0FFF);
     int32_t i_raw = (int32_t)(adc_word >> 16);
 
+    HAL_DAC_SetValue(&hdac3, DAC_CHANNEL_2, DAC_ALIGN_12B_R,
+                     (uint16_t)(i_raw));
     /*
      * 保存本拍输入对应的 PLL 波形。SOGI_run() 返回前会把相角推进到下一拍，
      * 因此不能在调用后直接使用更新后的 cosine 生成当前采样的参考。
@@ -148,16 +149,17 @@ void ctrl_loop_ac_isr(uint32_t adc_word)
     /* SOGI-PLL */
     SPLL_1PH_SOGI_run(&spll, (float32_t)(v_raw - PFC_VIN_OFFSET) / PFC_SOGI_NORM_DIV);
 
-    /* 滑动平均滤波 */
-    static float32_t v_filt, i_filt;
+    /* 电压一阶 IIR；电流直接使用 ADC 硬件过采样结果，避免额外反馈延迟。 */
+    static float32_t v_filt;
     v_filt += ((float32_t)(v_raw - PFC_VIN_OFFSET) / PFC_VIN_LSB_PER_V - v_filt) * 0.7f;
-    i_filt += ((float32_t)(i_raw - PFC_IIN_OFFSET) / PFC_IIN_LSB_PER_A - i_filt) * 0.7f;
+    float32_t i_sample =
+            (float32_t)(i_raw - PFC_IIN_OFFSET) / PFC_IIN_LSB_PER_A;
 
     /* 慢桥臂极性 (基于电压过零) */
     uint8_t polarity = (spll.cosine * pol_cos_off >= spll.sine * pol_sin_off) ? 0 : 1;
 
     /* PF 固定为 1: 有符号电流参考与当前电网电压采样同相。 */
-    ctrl_loop_current_isr(v_filt, i_filt, now_vout_V, ref_wave, polarity);
+    ctrl_loop_current_isr(v_filt, i_sample, now_vout_V, ref_wave, polarity);
 }
 
 /* ==================== DC 数据处理 (任务上下文) ==================== */
