@@ -11,6 +11,7 @@
 #define PFC_SLOW_BRIDGE_POS_PIN    GPIO_PIN_10
 #define PFC_SLOW_BRIDGE_NEG_PIN    GPIO_PIN_11
 #define PFC_SLOW_BRIDGE_PIN_MASK   (PFC_SLOW_BRIDGE_POS_PIN | PFC_SLOW_BRIDGE_NEG_PIN)
+#define PFC_FAST_BRIDGE_OUTPUTS    (HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2)
 
 /* ==================== 占空比计算 ==================== */
 
@@ -59,6 +60,26 @@ void pfc_write_duty(float32_t duty, uint8_t polarity)
     hhrtim1.Instance->sTimerxRegs[HRTIM_TIMERINDEX_TIMER_A].CMP3xR = cmp3;
 }
 
+void pfc_fast_bridge_disable(void)
+{
+    hhrtim1.Instance->sCommonRegs.ODISR |= PFC_FAST_BRIDGE_OUTPUTS;
+}
+
+void pfc_fast_main_enable(uint8_t polarity)
+{
+    uint32_t main_output = (polarity == 0U) ? HRTIM_OUTPUT_TA2 : HRTIM_OUTPUT_TA1;
+
+    pfc_fast_bridge_disable();
+    hhrtim1.Instance->sCommonRegs.OENR |= main_output;
+}
+
+void pfc_fast_sync_enable(uint8_t polarity)
+{
+    uint32_t sync_output = (polarity == 0U) ? HRTIM_OUTPUT_TA1 : HRTIM_OUTPUT_TA2;
+
+    hhrtim1.Instance->sCommonRegs.OENR |= sync_output;
+}
+
 void pfc_set_polarity(uint8_t polarity)
 {
     uint32_t set_pin;
@@ -81,4 +102,10 @@ void pfc_slow_bridge_disable(void)
 {
     PFC_SLOW_BRIDGE_GPIO_PORT->BSRR =
         (uint32_t)PFC_SLOW_BRIDGE_PIN_MASK << 16U;
+}
+
+void pfc_power_stage_disable(void)
+{
+    pfc_fast_bridge_disable();
+    pfc_slow_bridge_disable();
 }

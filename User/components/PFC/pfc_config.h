@@ -12,7 +12,7 @@
 #include "main.h"
 
 /* ==================== PWM 参数 ==================== */
-#define PFC_PWM_PERIOD          PWM_Period       /**< HRTIM 周期 (168MHz*8/44800 = 30kHz) */
+#define PFC_PWM_PERIOD          PWM_Period   /**< HRTIM 周期 */
 #define PFC_PWM_FREQ            20000.0f     /**< PWM 开关频率 (Hz) */
 #define PFC_DUTY_MIN            0.02f        /**< 最小占空比 (防止脉冲丢失) */
 #define PFC_DUTY_MAX            0.95f        /**< 最大占空比 (留死区余量) */
@@ -63,18 +63,30 @@
 #define PFC_SOFTSTART_SEC       1.0f         /**< 软启动持续时间 (s) */
 
 /* ==================== PI 默认参数 ==================== */
-/* 电流内环 (30kHz), 带宽 ~2kHz */
+/* 电流内环 (20kHz), 带宽 ~2kHz */
 #define PFC_I_KP_DEFAULT        0.2f
 #define PFC_I_KI_DEFAULT        0.2f
 #define PFC_I_INTEGRAL_MAX      2.0f
 #define PFC_I_OUTPUT_MAX        0.5f
 
-/* 电压外环 (~300Hz), 带宽 ~15Hz */
+/* 电压外环 (100Hz), 带宽 ~15Hz */
 #define PFC_V_KP_DEFAULT        0.2f
 #define PFC_V_KI_DEFAULT        0.8f
 #define PFC_V_KD_DEFAULT        0.05f
 #define PFC_V_INTEGRAL_MAX      10.0f
 #define PFC_V_OUTPUT_MAX        3.0f
+
+/* ==================== 过零换向参数 ==================== */
+#define PFC_MIN_RUN_VOUT_V          3.0f    /**< 母线低于此值时保持功率管关闭 */
+#define PFC_ZC_ENTER_V              1.0f    /**< 进入过零关闭窗口的电压绝对值 */
+#define PFC_ZC_EXIT_V               2.5f    /**< 允许退出过零窗口的电压绝对值 */
+#define PFC_ZC_CURRENT_A            0.10f   /**< 判定电感电流已接近零的阈值 */
+#define PFC_REVERSE_CURRENT_A       0.20f   /**< 正向 PFC 允许的最大反向电流 */
+#define PFC_ZC_STABLE_SAMPLES       3U      /**< 新极性连续稳定采样数 */
+#define PFC_ZC_ZERO_CURRENT_SAMPLES 2U      /**< 零电流连续稳定采样数 */
+#define PFC_ZC_BLANK_CYCLES         3U      /**< 快慢桥全部关闭的最少 PWM 周期 */
+#define PFC_ZC_RAMP_CYCLES          8U      /**< Boost 主开关占空比软启动周期数 */
+#define PFC_ZC_SYNC_DELAY_CYCLES    2U      /**< 慢桥导通后延迟启用同步管的周期数 */
 
 /* ==================== 保护参数 ==================== */
 #define PFC_OVP_RATIO           1.2f        /**< 过压保护阈值 = Vout_target × ratio */

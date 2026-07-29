@@ -15,9 +15,17 @@ float32_t pfc_calc_ideal_duty(float32_t vin_inst, float32_t vout);
 
 void pfc_write_duty(float32_t duty, uint8_t polarity);
 
+void pfc_fast_bridge_disable(void);
+
+void pfc_fast_main_enable(uint8_t polarity);
+
+void pfc_fast_sync_enable(uint8_t polarity);
+
 void pfc_set_polarity(uint8_t polarity);
 
 void pfc_slow_bridge_disable(void);
+
+void pfc_power_stage_disable(void);
 
 static inline float32_t pfc_gen_i_ref(float32_t i_amplitude, float32_t abs_sin)
 {
