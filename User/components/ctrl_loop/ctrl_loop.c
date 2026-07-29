@@ -42,21 +42,16 @@ static float now_vout_V;                /* DC 输出电压 (V) */
 static float now_iout_A;                /* DC 输出电流 (A) */
 
 typedef enum {
-    PFC_ZC_HOLD = 0,
-    PFC_ZC_BLANK,
-    PFC_ZC_PRELOAD,
-    PFC_ZC_MAIN_RAMP,
-    PFC_ZC_SYNC_DELAY,
-    PFC_ZC_RUN
-} PfcZcState;
+    PFC_COMM_HOLD = 0,
+    PFC_COMM_PRELOAD,
+    PFC_COMM_SLOW_BLANK,
+    PFC_COMM_RUN
+} PfcCommutationState;
 
-static PfcZcState zc_state;
-static uint8_t zc_target_polarity;
-static uint16_t zc_blank_cycles;
-static uint16_t zc_stable_samples;
-static uint16_t zc_zero_current_samples;
-static uint16_t zc_ramp_cycles;
-static uint16_t zc_sync_delay_cycles;
+static PfcCommutationState comm_state;
+static uint8_t comm_target_polarity;
+static uint16_t comm_blank_cycles;
+static uint16_t comm_stable_samples;
 
 /* ==================== 辅助宏 ==================== */
 
@@ -74,163 +69,73 @@ static uint16_t zc_sync_delay_cycles;
     .max_integral = PFC_V_INTEGRAL_MAX, .min_integral = 0.0f, \
     .cal_type = PID_CAL_TYPE_INCREMENTAL }
 
-static void ctrl_loop_enter_zc_blank(void)
+static void ctrl_loop_reset_comm_validation(void)
+{
+    comm_target_polarity = 0xFFU;
+    comm_blank_cycles = 0U;
+    comm_stable_samples = 0U;
+}
+
+static void ctrl_loop_hold_power_stage_off(void)
 {
     pfc_power_stage_disable();
     pid_reset_ctrl_block(i_pid);
 
     duty_current = 0.0f;
     hw_polarity = 0xFFU;
-    zc_state = PFC_ZC_BLANK;
-    zc_target_polarity = 0xFFU;
-    zc_blank_cycles = 0U;
-    zc_stable_samples = 0U;
-    zc_zero_current_samples = 0U;
-    zc_ramp_cycles = 0U;
-    zc_sync_delay_cycles = 0U;
+    comm_state = PFC_COMM_HOLD;
+    ctrl_loop_reset_comm_validation();
 }
 
-static void ctrl_loop_hold_power_stage_off(void)
+static void ctrl_loop_enter_slow_blank(void)
 {
-    ctrl_loop_enter_zc_blank();
-    zc_state = PFC_ZC_HOLD;
+    /*
+     * 过零时只关闭慢桥。慢管体二极管负责阻断直流母线倒灌，
+     * 快桥和电流环继续运行，避免人为制造电流为零的平台。
+     */
+    pfc_slow_bridge_disable();
+    hw_polarity = 0xFFU;
+    comm_state = PFC_COMM_SLOW_BLANK;
+    ctrl_loop_reset_comm_validation();
 }
 
-static uint8_t ctrl_loop_zc_ready(float32_t vin_inst, float32_t il_inst,
-                                  uint8_t pll_polarity)
+static uint8_t ctrl_loop_slow_polarity_ready(float32_t vin_inst,
+                                             uint8_t pll_polarity)
 {
-    float32_t vin_abs = fabsf(vin_inst);
 
-    if(zc_blank_cycles < PFC_ZC_BLANK_CYCLES)
-        zc_blank_cycles++;
+    if(comm_blank_cycles < PFC_ZC_BLANK_CYCLES)
+        comm_blank_cycles++;
 
-    if(fabsf(il_inst) <= PFC_ZC_CURRENT_A)
-    {
-        if(zc_zero_current_samples < PFC_ZC_ZERO_CURRENT_SAMPLES)
-            zc_zero_current_samples++;
-    }
-    else
-    {
-        zc_zero_current_samples = 0U;
-    }
-
-    if(vin_abs >= PFC_ZC_EXIT_V)
+    if(fabsf(vin_inst) >= PFC_ZC_EXIT_V)
     {
         uint8_t measured_polarity = (vin_inst >= 0.0f) ? 0U : 1U;
 
         if(measured_polarity == pll_polarity)
         {
-            if(zc_target_polarity != measured_polarity)
+            if(comm_target_polarity != measured_polarity)
             {
-                zc_target_polarity = measured_polarity;
-                zc_stable_samples = 1U;
+                comm_target_polarity = measured_polarity;
+                comm_stable_samples = 1U;
             }
-            else if(zc_stable_samples < PFC_ZC_STABLE_SAMPLES)
+            else if(comm_stable_samples < PFC_ZC_STABLE_SAMPLES)
             {
-                zc_stable_samples++;
+                comm_stable_samples++;
             }
         }
         else
         {
-            zc_target_polarity = 0xFFU;
-            zc_stable_samples = 0U;
+            comm_target_polarity = 0xFFU;
+            comm_stable_samples = 0U;
         }
     }
     else
     {
-        zc_target_polarity = 0xFFU;
-        zc_stable_samples = 0U;
+        comm_target_polarity = 0xFFU;
+        comm_stable_samples = 0U;
     }
 
-    return (zc_blank_cycles >= PFC_ZC_BLANK_CYCLES) &&
-           (zc_stable_samples >= PFC_ZC_STABLE_SAMPLES) &&
-           (zc_zero_current_samples >= PFC_ZC_ZERO_CURRENT_SAMPLES);
-}
-
-static void ctrl_loop_preload_main_ramp(void)
-{
-    duty_current = PFC_DUTY_MIN;
-    zc_ramp_cycles = 0U;
-    zc_state = PFC_ZC_PRELOAD;
-
-    pfc_write_duty(duty_current, zc_target_polarity);
-}
-
-static void ctrl_loop_main_ramp_step(float32_t vin_inst, float32_t vout,
-                                     uint8_t pll_polarity)
-{
-    uint8_t measured_polarity = (vin_inst >= 0.0f) ? 0U : 1U;
-
-    if((fabsf(vin_inst) <= PFC_ZC_ENTER_V) ||
-       (measured_polarity != zc_target_polarity) ||
-       (pll_polarity != zc_target_polarity))
-    {
-        ctrl_loop_enter_zc_blank();
-        return;
-    }
-
-    if(zc_ramp_cycles < PFC_ZC_RAMP_CYCLES)
-        zc_ramp_cycles++;
-
-    float32_t target_duty = pfc_calc_ideal_duty(vin_inst, vout);
-    float32_t ramp_ratio =
-        (float32_t)zc_ramp_cycles / (float32_t)PFC_ZC_RAMP_CYCLES;
-    duty_current = PFC_DUTY_MIN +
-                   (target_duty - PFC_DUTY_MIN) * ramp_ratio;
-    pfc_write_duty(duty_current, zc_target_polarity);
-
-    if(zc_ramp_cycles >= PFC_ZC_RAMP_CYCLES)
-    {
-        pfc_set_polarity(zc_target_polarity);
-        hw_polarity = zc_target_polarity;
-        zc_sync_delay_cycles = 0U;
-        zc_state = PFC_ZC_SYNC_DELAY;
-    }
-}
-
-static void ctrl_loop_sync_delay_step(float32_t vin_inst, uint8_t pll_polarity)
-{
-    uint8_t measured_polarity = (vin_inst >= 0.0f) ? 0U : 1U;
-
-    if((fabsf(vin_inst) <= PFC_ZC_ENTER_V) ||
-       (measured_polarity != zc_target_polarity) ||
-       (pll_polarity != zc_target_polarity))
-    {
-        ctrl_loop_enter_zc_blank();
-        return;
-    }
-
-    if(zc_sync_delay_cycles < PFC_ZC_SYNC_DELAY_CYCLES)
-        zc_sync_delay_cycles++;
-
-    if(zc_sync_delay_cycles >= PFC_ZC_SYNC_DELAY_CYCLES)
-    {
-        pfc_fast_sync_enable(zc_target_polarity);
-        zc_state = PFC_ZC_RUN;
-        pid_reset_ctrl_block(i_pid);
-    }
-}
-
-static float32_t ctrl_loop_unity_pf_wave(void)
-{
-    float32_t voltage_peak_pu = fabsf(spll.u_D[0]);
-    float32_t min_voltage_peak_pu =
-        (PFC_UVP_VIN_RMS * 1.41421356f) / PFC_SOGI_VOLT_PER_UNIT;
-
-    if(voltage_peak_pu < min_voltage_peak_pu)
-        return 0.0f;
-
-    /*
-     * osg_u 是与当前电网电压同相的 SOGI 输出，u_D 是其峰值。
-     * 不直接使用 cosine，因为 SOGI_run() 返回前已将 PLL 相角推进一拍。
-     */
-    float32_t ref_wave = spll.osg_u[0] / voltage_peak_pu;
-    if(ref_wave > 1.0f)
-        ref_wave = 1.0f;
-    else if(ref_wave < -1.0f)
-        ref_wave = -1.0f;
-
-    return ref_wave;
+    return (comm_blank_cycles >= PFC_ZC_BLANK_CYCLES) &&
+           (comm_stable_samples >= PFC_ZC_STABLE_SAMPLES);
 }
 
 /* ==================== AC 采样 ISR (20kHz) ==================== */
@@ -239,6 +144,12 @@ void ctrl_loop_ac_isr(uint32_t adc_word)
 {
     int32_t v_raw = (int32_t)(adc_word & 0x0FFF);
     int32_t i_raw = (int32_t)(adc_word >> 16);
+
+    /*
+     * 保存本拍输入对应的 PLL 波形。SOGI_run() 返回前会把相角推进到下一拍，
+     * 因此不能在调用后直接使用更新后的 cosine 生成当前采样的参考。
+     */
+    float32_t ref_wave = spll.cosine;
 
     /* SOGI-PLL */
     SPLL_1PH_SOGI_run(&spll, (float32_t)(v_raw - PFC_VIN_OFFSET) / PFC_SOGI_NORM_DIV);
@@ -251,8 +162,7 @@ void ctrl_loop_ac_isr(uint32_t adc_word)
     /* 慢桥臂极性 (基于电压过零) */
     uint8_t polarity = (spll.cosine * pol_cos_off >= spll.sine * pol_sin_off) ? 0 : 1;
 
-    /* PF 固定为 1: 由 SOGI 同相电压生成单位幅值电流参考。 */
-    float32_t ref_wave = ctrl_loop_unity_pf_wave();
+    /* PF 固定为 1: 单位幅值参考与当前电网电压采样同相。 */
     float32_t abs_ref = fabsf(ref_wave);
     uint8_t i_sign = (ref_wave >= 0.0f) ? 0 : 1;
 
@@ -350,62 +260,46 @@ void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
     if((ctrl_loop_state_get() == CTRL_STATE_FAULT) ||
        (vout < PFC_MIN_RUN_VOUT_V))
     {
-        if(zc_state != PFC_ZC_HOLD)
+        if(comm_state != PFC_COMM_HOLD)
             ctrl_loop_hold_power_stage_off();
         return;
     }
 
-    if(zc_state == PFC_ZC_HOLD)
+    if(comm_state == PFC_COMM_HOLD)
     {
-        ctrl_loop_enter_zc_blank();
+        /*
+         * 先写入安全占空比，等待一次 PWM 更新后再打开快桥，
+         * 避免使能瞬间使用未初始化的比较值。
+         */
+        duty_current = pfc_calc_ideal_duty(vin_inst, vout);
+        pfc_write_duty(duty_current, polarity);
+        comm_state = PFC_COMM_PRELOAD;
         return;
     }
 
-    if(zc_state == PFC_ZC_BLANK)
+    if(comm_state == PFC_COMM_PRELOAD)
     {
-        if(ctrl_loop_zc_ready(vin_inst, il_inst, polarity))
-            ctrl_loop_preload_main_ramp();
+        pfc_fast_bridge_enable();
+        ctrl_loop_enter_slow_blank();
         return;
     }
 
-    if(zc_state == PFC_ZC_PRELOAD)
+    if(comm_state == PFC_COMM_SLOW_BLANK)
     {
-        uint8_t measured_polarity = (vin_inst >= 0.0f) ? 0U : 1U;
-        if((fabsf(vin_inst) <= PFC_ZC_ENTER_V) ||
-           (measured_polarity != zc_target_polarity) ||
-           (polarity != zc_target_polarity))
+        if(ctrl_loop_slow_polarity_ready(vin_inst, polarity))
         {
-            ctrl_loop_enter_zc_blank();
-            return;
+            pfc_set_polarity(comm_target_polarity);
+            hw_polarity = comm_target_polarity;
+            comm_state = PFC_COMM_RUN;
         }
-
-        /* CMP 预装载已跨过一次周期更新，此时主开关处于关断区间。 */
-        pfc_fast_main_enable(zc_target_polarity);
-        zc_state = PFC_ZC_MAIN_RAMP;
-        return;
     }
-
-    if(zc_state == PFC_ZC_MAIN_RAMP)
+    else if((fabsf(vin_inst) <= PFC_ZC_ENTER_V) ||
+            (polarity != hw_polarity))
     {
-        ctrl_loop_main_ramp_step(vin_inst, vout, polarity);
-        return;
-    }
-
-    if(zc_state == PFC_ZC_SYNC_DELAY)
-    {
-        ctrl_loop_sync_delay_step(vin_inst, polarity);
-        return;
+        ctrl_loop_enter_slow_blank();
     }
 
     float i_fb = (i_sign == 0U) ? il_inst : -il_inst;
-    if((fabsf(vin_inst) <= PFC_ZC_ENTER_V) ||
-       (polarity != hw_polarity) ||
-       (i_fb < -PFC_REVERSE_CURRENT_A))
-    {
-        ctrl_loop_enter_zc_blank();
-        return;
-    }
-
     float i_ref = i_amplitude * abs_ref;
     float i_corr;
     pid_compute(i_pid, i_ref - i_fb, &i_corr);
@@ -451,13 +345,10 @@ void ctrl_loop_set_voltage_pi(float32_t kp, float32_t ki, float32_t kd)
 
 void ctrl_loop_clear_fault(void)
 {
-    pfc_power_stage_disable();
-    pid_reset_ctrl_block(i_pid);
+    ctrl_loop_hold_power_stage_off();
     pid_reset_ctrl_block(v_pid);
     ctrl_loop_state_clear_fault();
     i_amplitude = 0.0f;
-    zc_state = PFC_ZC_HOLD;
-    hw_polarity = 0xFFU;
 }
 
 /* ---- Getter ---- */

@@ -17,9 +17,7 @@ void pfc_write_duty(float32_t duty, uint8_t polarity);
 
 void pfc_fast_bridge_disable(void);
 
-void pfc_fast_main_enable(uint8_t polarity);
-
-void pfc_fast_sync_enable(uint8_t polarity);
+void pfc_fast_bridge_enable(void);
 
 void pfc_set_polarity(uint8_t polarity);
 

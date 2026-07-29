@@ -80,13 +80,8 @@
 #define PFC_MIN_RUN_VOUT_V          3.0f    /**< 母线低于此值时保持功率管关闭 */
 #define PFC_ZC_ENTER_V              1.0f    /**< 进入过零关闭窗口的电压绝对值 */
 #define PFC_ZC_EXIT_V               2.5f    /**< 允许退出过零窗口的电压绝对值 */
-#define PFC_ZC_CURRENT_A            0.10f   /**< 判定电感电流已接近零的阈值 */
-#define PFC_REVERSE_CURRENT_A       0.20f   /**< 正向 PFC 允许的最大反向电流 */
 #define PFC_ZC_STABLE_SAMPLES       3U      /**< 新极性连续稳定采样数 */
-#define PFC_ZC_ZERO_CURRENT_SAMPLES 2U      /**< 零电流连续稳定采样数 */
-#define PFC_ZC_BLANK_CYCLES         3U      /**< 快慢桥全部关闭的最少 PWM 周期 */
-#define PFC_ZC_RAMP_CYCLES          8U      /**< Boost 主开关占空比软启动周期数 */
-#define PFC_ZC_SYNC_DELAY_CYCLES    2U      /**< 慢桥导通后延迟启用同步管的周期数 */
+#define PFC_ZC_BLANK_CYCLES         3U      /**< 慢桥双关的最少 PWM 周期，快桥保持运行 */
 
 /* ==================== 保护参数 ==================== */
 #define PFC_OVP_RATIO           1.2f        /**< 过压保护阈值 = Vout_target × ratio */

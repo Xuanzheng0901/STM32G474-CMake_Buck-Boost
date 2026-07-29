@@ -65,19 +65,9 @@ void pfc_fast_bridge_disable(void)
     hhrtim1.Instance->sCommonRegs.ODISR |= PFC_FAST_BRIDGE_OUTPUTS;
 }
 
-void pfc_fast_main_enable(uint8_t polarity)
+void pfc_fast_bridge_enable(void)
 {
-    uint32_t main_output = (polarity == 0U) ? HRTIM_OUTPUT_TA2 : HRTIM_OUTPUT_TA1;
-
-    pfc_fast_bridge_disable();
-    hhrtim1.Instance->sCommonRegs.OENR |= main_output;
-}
-
-void pfc_fast_sync_enable(uint8_t polarity)
-{
-    uint32_t sync_output = (polarity == 0U) ? HRTIM_OUTPUT_TA1 : HRTIM_OUTPUT_TA2;
-
-    hhrtim1.Instance->sCommonRegs.OENR |= sync_output;
+    hhrtim1.Instance->sCommonRegs.OENR |= PFC_FAST_BRIDGE_OUTPUTS;
 }
 
 void pfc_set_polarity(uint8_t polarity)
