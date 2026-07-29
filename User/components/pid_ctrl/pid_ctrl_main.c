@@ -242,10 +242,15 @@ static void adc_data_process(uint32_t *adc12_data, uint16_t *adc3_data)
     // 预计算倒数，用乘法替代 6 次除法
     const float inv_N = 1.0f / (float)SAMPLE_COUNT;
 
-    // 电压/电流 RMS 系数
-    // V: 3000mV / 4095 * 39.25 ≈ 28.5
+    // 三相电压 RMS 系数: 基础系数 * 示波器实测值 / MCU 测量值
+    static const float voltage_rms_coef[3] = {
+        28.272f, // A: 28.5 * 9.92 / 10.00
+        28.301f, // B: 28.5 * 9.93 / 10.00
+        28.415f, // C: 28.5 * 9.97 / 10.00
+    };
+
+    // 电流 RMS 系数
     // I: (3000mV / 4095) / 100 ≈ 0.007326
-#define V_RMS_COEF (28.5f)
 #define I_RMS_COEF (0.007326007f)
 
     // 一次性转浮点计算 RMS + 卡尔曼滤波
@@ -260,7 +265,7 @@ static void adc_data_process(uint32_t *adc12_data, uint16_t *adc3_data)
             variance = 0.0f;
         float rms;
         arm_sqrt_f32(variance, &rms);
-        float raw_voltage_mV = rms * V_RMS_COEF;
+        float raw_voltage_mV = rms * voltage_rms_coef[ph];
 
         // --- 电流 ---
         f_sum = (float)sum_i[ph];
