@@ -5,6 +5,12 @@
 
 #include "pfc_utils.h"
 #include "hrtim.h"
+#include "main.h"
+
+#define PFC_SLOW_BRIDGE_GPIO_PORT  GPIOA
+#define PFC_SLOW_BRIDGE_POS_PIN    GPIO_PIN_10
+#define PFC_SLOW_BRIDGE_NEG_PIN    GPIO_PIN_11
+#define PFC_SLOW_BRIDGE_PIN_MASK   (PFC_SLOW_BRIDGE_POS_PIN | PFC_SLOW_BRIDGE_NEG_PIN)
 
 /* ==================== 占空比计算 ==================== */
 
@@ -53,24 +59,26 @@ void pfc_write_duty(float32_t duty, uint8_t polarity)
     hhrtim1.Instance->sTimerxRegs[HRTIM_TIMERINDEX_TIMER_A].CMP3xR = cmp3;
 }
 
-/*
- * TB1: CubeMX 设 Set=CMP1, Reset=CMP3. TB2 硬件反相.
- * 0%: CMP1=1, CMP3=1 → Set/Reset 同拍, Reset 优先 → 常低
- * 100%: CMP1=1, CMP3=Period → Set 在 timer=1, Reset 在 Period → 常高
- */
 void pfc_set_polarity(uint8_t polarity)
 {
-    if(polarity == 0) //正半周
-    {
-        HAL_HRTIM_WaveformSetOutputLevel(&hhrtim1, HRTIM_TIMERINDEX_TIMER_B, HRTIM_OUTPUT_TB1,HRTIM_OUTPUTLEVEL_ACTIVE);
-        HAL_HRTIM_WaveformSetOutputLevel(&hhrtim1, HRTIM_TIMERINDEX_TIMER_B, HRTIM_OUTPUT_TB2,
-                                         HRTIM_OUTPUTLEVEL_INACTIVE);
+    uint32_t set_pin;
+    uint32_t reset_pin;
+
+    if(polarity == 0U) {
+        set_pin = PFC_SLOW_BRIDGE_POS_PIN;
+        reset_pin = PFC_SLOW_BRIDGE_NEG_PIN;
     }
-    else
-    {
-        HAL_HRTIM_WaveformSetOutputLevel(&hhrtim1, HRTIM_TIMERINDEX_TIMER_B, HRTIM_OUTPUT_TB1,
-                                         HRTIM_OUTPUTLEVEL_INACTIVE);
-        HAL_HRTIM_WaveformSetOutputLevel(&hhrtim1, HRTIM_TIMERINDEX_TIMER_B, HRTIM_OUTPUT_TB2,
-                                         HRTIM_OUTPUTLEVEL_ACTIVE);
+    else {
+        set_pin = PFC_SLOW_BRIDGE_NEG_PIN;
+        reset_pin = PFC_SLOW_BRIDGE_POS_PIN;
     }
+
+    /* 同一次 BSRR 写入完成一开一关，避免中间态。 */
+    PFC_SLOW_BRIDGE_GPIO_PORT->BSRR = set_pin | (reset_pin << 16U);
+}
+
+void pfc_slow_bridge_disable(void)
+{
+    PFC_SLOW_BRIDGE_GPIO_PORT->BSRR =
+        (uint32_t)PFC_SLOW_BRIDGE_PIN_MASK << 16U;
 }

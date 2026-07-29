@@ -153,14 +153,14 @@ void ctrl_loop_init(void)
 
     i_amplitude = 0.0f;
     duty_current = 0.0f;
-    hw_polarity = 0;
+    hw_polarity = 0xFFU;
     now_vout_V = 0.0f;
     now_iout_A = 0.0f;
 
     ctrl_loop_set_polarity_offset(0.0f);
 
     /* 慢桥臂初始安全态: 双管关闭, 体二极管充当整流 */
-    pfc_set_polarity(0);
+    pfc_slow_bridge_disable();
 
     xTaskCreate(ctrl_loop_routine, "CtrlLoop", 2048, NULL, 15, NULL);
 }
@@ -176,9 +176,14 @@ void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
                            float32_t vout, float32_t abs_ref,
                            uint8_t polarity, uint8_t i_sign, uint8_t reverse)
 {
-    /* 慢桥臂: 基于电压过零换向 */
-    if(polarity != hw_polarity)
+    if(ctrl_loop_state_get() == CTRL_STATE_FAULT)
     {
+        pfc_slow_bridge_disable();
+        hw_polarity = 0xFFU;
+    }
+    else if(polarity != hw_polarity)
+    {
+        /* 慢桥臂: 基于电压过零换向 */
         pfc_set_polarity(polarity);
         hw_polarity = polarity;
     }

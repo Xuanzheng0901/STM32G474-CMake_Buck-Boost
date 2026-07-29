@@ -17,6 +17,8 @@ void pfc_write_duty(float32_t duty, uint8_t polarity);
 
 void pfc_set_polarity(uint8_t polarity);
 
+void pfc_slow_bridge_disable(void);
+
 static inline float32_t pfc_gen_i_ref(float32_t i_amplitude, float32_t abs_sin)
 {
     return i_amplitude * abs_sin;
