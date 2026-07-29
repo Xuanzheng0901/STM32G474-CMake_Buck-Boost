@@ -2,7 +2,7 @@
  * @file    ctrl_loop.h
  * @brief   图腾柱 PFC 总控制回路 API
  *
- * @details 编排电流内环 (30kHz ISR) + 电压外环 (~300Hz 任务) + 软启动
+ * @details 编排电流内环 (20kHz ISR) + 电压外环 (100Hz 任务) + 软启动
  */
 
 #ifndef __CTRL_LOOP_H__
@@ -16,13 +16,13 @@
 void ctrl_loop_init(void);
 CtrlLoop_State ctrl_loop_get_state(void);
 
-/* AC 采样 ISR 入口 (30kHz, 由 ADC 回调调用) */
+/* AC 采样 ISR 入口 (20kHz, 由 ADC 回调调用) */
 void ctrl_loop_ac_isr(uint32_t adc_word);
 
-/* 电流内环 (30kHz ISR)
- * polarity: 慢桥臂, i_sign: 反馈符号, reverse: 反向功率→Buck前馈 */
+/* 电流内环 (20kHz ISR)
+ * polarity: 慢桥臂, i_sign: 电流反馈符号 */
 void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst, float32_t vout,
-                           float32_t abs_ref, uint8_t polarity, uint8_t i_sign, uint8_t reverse);
+                           float32_t abs_ref, uint8_t polarity, uint8_t i_sign);
 
 /* 设置目标输出电压, 自动触发软启动过渡 */
 void ctrl_loop_set_vout(float32_t vout);
@@ -43,9 +43,5 @@ void ctrl_loop_set_polarity_offset(float32_t deg);
 
 /* 故障清除, 重新软启动 */
 void ctrl_loop_clear_fault(void);
-
-/* 设置功率因数 (-1~1, 正=容性/超前, 负=感性/滞后, 默认=1) */
-void ctrl_loop_set_pf(float32_t pf);
-float32_t ctrl_loop_get_pf(void);
 
 #endif /* __CTRL_LOOP_H__ */

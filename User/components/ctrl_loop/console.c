@@ -3,7 +3,6 @@
  * @brief   串口控制台: 运行时参数调谐
  *          命令: V/P <Kp> <Ki> [Kd]  — 电压环 PID
  *                I   <Kp> <Ki>       — 电流环 PI
- *                W   <PF>            — 功率因数 (-1~1)
  */
 
 #include "console.h"
@@ -73,22 +72,8 @@ static void console_task(void *pvParameters)
                 }
                 break;
 
-            case 'w':
-            case 'W':
-                if(n >= 2)
-                {
-                    ctrl_loop_set_pf(a);
-                    LOGI("console", "PF 已设置: %.3f (%s)",
-                         a, (a >= 0) ? "容性/超前" : "感性/滞后");
-                }
-                else
-                {
-                    LOGE("console", "格式: W <PF>  (正=容性, 负=感性)");
-                }
-                break;
-
             default:
-                LOGE("console", "未知命令: %c (可用: V/I/W)", cmd);
+                LOGE("console", "未知命令: %c (可用: V/I)", cmd);
         }
 
         memset(rx_buf, 0, RX_BUF_SIZE);
