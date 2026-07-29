@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 12 px
  * Bpp: 1
- * Opts: --bpp 1 --size 12 --no-compress --font E:/Pluviophile/Downloads/fusion-pixel-font-12px-monospaced-ttf-v2026.02.27/fusion-pixel-12px-monospaced-zh_hans.ttf --symbols 电压流功率开机中关过热保护你好设定实际三相 --range 32-127 --format lvgl -o fusion_pixel_12.c
+ * Opts: --bpp 1 --size 12 --no-compress --font E:/Pluviophile/Downloads/fusion-pixel-font-12px-monospaced-ttf-v2026.02.27/fusion-pixel-12px-monospaced-zh_hans.ttf --symbols 电压流功率开机中关过热保护你好设定实际三相频 --range 32-127 --format lvgl -o fusion_pixel_12.c
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE
@@ -389,7 +389,11 @@ static LV_ATTRIBUTE_LARGE_CONST const uint8_t glyph_bitmap[] = {
 
     /* U+9645 "际" */
     0xe7, 0xd4, 0x2, 0x80, 0x57, 0xfc, 0x11, 0x42,
-    0x2a, 0x55, 0x49, 0xe9, 0x32, 0x26, 0xc, 0x0
+    0x2a, 0x55, 0x49, 0xe9, 0x32, 0x26, 0xc, 0x0,
+
+    /* U+9891 "频" */
+    0x23, 0xf7, 0x12, 0x8f, 0xd1, 0x1f, 0xaa, 0x45,
+    0x5a, 0xad, 0x55, 0x10, 0x84, 0x2b, 0x8, 0x80
 };
 
 
@@ -514,7 +518,8 @@ static const lv_font_fmt_txt_glyph_dsc_t glyph_dsc[] = {
     {.bitmap_index = 679, .adv_w = 192, .box_w = 11, .box_h = 11, .ofs_x = 0, .ofs_y = -2},
     {.bitmap_index = 695, .adv_w = 192, .box_w = 11, .box_h = 11, .ofs_x = 0, .ofs_y = -2},
     {.bitmap_index = 711, .adv_w = 192, .box_w = 11, .box_h = 11, .ofs_x = 0, .ofs_y = -2},
-    {.bitmap_index = 727, .adv_w = 192, .box_w = 11, .box_h = 11, .ofs_x = 0, .ofs_y = -2}
+    {.bitmap_index = 727, .adv_w = 192, .box_w = 11, .box_h = 11, .ofs_x = 0, .ofs_y = -2},
+    {.bitmap_index = 743, .adv_w = 192, .box_w = 11, .box_h = 11, .ofs_x = 0, .ofs_y = -2}
 };
 
 /*---------------------
@@ -524,7 +529,7 @@ static const lv_font_fmt_txt_glyph_dsc_t glyph_dsc[] = {
 static const uint16_t unicode_list_1[] = {
     0x0, 0x24, 0x157, 0x1d4, 0x36a, 0x496, 0x582, 0xb74,
     0xd91, 0xd95, 0x10f7, 0x149b, 0x1931, 0x1f38, 0x22e4, 0x257e,
-    0x272c, 0x28ef, 0x3db5, 0x41be, 0x483c
+    0x272c, 0x28ef, 0x3db5, 0x41be, 0x483c, 0x4a88
 };
 
 /*Collect the unicode lists and glyph_id offsets*/
@@ -535,8 +540,8 @@ static const lv_font_fmt_txt_cmap_t cmaps[] =
         .unicode_list = NULL, .glyph_id_ofs_list = NULL, .list_length  = 0, .type = LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY
     },
     {
-        .range_start  = 19977, .range_length               = 18493, .glyph_id_start = 96,
-        .unicode_list = unicode_list_1, .glyph_id_ofs_list = NULL, .list_length     = 21,
+        .range_start  = 19977, .range_length               = 19081, .glyph_id_start = 96,
+        .unicode_list = unicode_list_1, .glyph_id_ofs_list = NULL, .list_length     = 22,
         .type         = LV_FONT_FMT_TXT_CMAP_SPARSE_TINY
     }
 };
@@ -601,4 +606,3 @@ const lv_font_t fusion_pixel_12 = {
 
 
 #endif /*#if FUSION_PIXEL_12*/
-

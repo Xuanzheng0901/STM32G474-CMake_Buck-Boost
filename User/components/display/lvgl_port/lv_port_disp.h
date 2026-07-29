@@ -16,21 +16,13 @@
  *********************/
 
 /**********************
- *      TYPEDEFS
- **********************/
-typedef struct {
-    lv_coord_t spinbox_x;
-    lv_coord_t spinbox_width;
-    lv_coord_t spinbox1_x;
-    lv_coord_t spinbox1_width;
-} focus_anim_config_t;
-
-/**********************
  * GLOBAL PROTOTYPES
  **********************/
 /* Initialize low level display driver */
 
 void ui_init(void);
+
+void ui_frequency_changed_cb(uint32_t frequency_hz);
 
 void lv_port_disp_init(void);
 

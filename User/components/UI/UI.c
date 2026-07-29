@@ -10,7 +10,6 @@
 LV_FONT_DECLARE(chillbit);
 
 extern lv_obj_t *highlight_frame;
-extern lv_anim_t focus_anim;
 
 extern void focus_event_cb(lv_event_t *e);
 
@@ -25,6 +24,8 @@ static lv_obj_t *ib_label = NULL;
 static lv_obj_t *ic_label = NULL;
 static lv_obj_t *power_label = NULL;
 lv_obj_t *voltage_spinbox = NULL;
+lv_obj_t *frequency_30_button = NULL;
+lv_obj_t *frequency_60_button = NULL;
 
 static char buf_va[8] = "  0.0";
 static char buf_vb[8] = "  0.0";
@@ -33,6 +34,59 @@ static char buf_ia[6] = "0.00";
 static char buf_ib[6] = "0.00";
 static char buf_ic[6] = "0.00";
 static char buf_power[10] = "   0.0W";
+
+void ui_frequency_changed_cb(uint32_t frequency_hz)
+{
+    (void)frequency_hz;
+    /* TODO: 在此补全 30 Hz / 60 Hz 的实际切换逻辑。 */
+}
+
+static void frequency_button_event_cb(lv_event_t *evt)
+{
+    lv_obj_t *button = lv_event_get_current_target(evt);
+    uint32_t frequency_hz;
+
+    if(button == frequency_30_button)
+    {
+        frequency_hz = 30U;
+        lv_obj_add_state(frequency_30_button, LV_STATE_CHECKED);
+        lv_obj_remove_state(frequency_60_button, LV_STATE_CHECKED);
+    }
+    else
+    {
+        frequency_hz = 60U;
+        lv_obj_remove_state(frequency_30_button, LV_STATE_CHECKED);
+        lv_obj_add_state(frequency_60_button, LV_STATE_CHECKED);
+    }
+
+    ui_frequency_changed_cb(frequency_hz);
+}
+
+static lv_obj_t *frequency_button_create(lv_obj_t *parent, const char *text, int32_t x)
+{
+    lv_obj_t *button = lv_button_create(parent);
+    lv_obj_set_size(button, 30, 12);
+    lv_obj_align(button, LV_ALIGN_TOP_LEFT, x, 80);
+    lv_obj_set_style_pad_all(button, 0, 0);
+    lv_obj_set_style_radius(button, 0, 0);
+    lv_obj_set_style_border_width(button, 0, 0);
+    lv_obj_set_style_shadow_width(button, 0, 0);
+    lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_outline_opa(button, LV_OPA_TRANSP, LV_STATE_FOCUS_KEY);
+    lv_obj_set_style_text_color(button, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(button, lv_color_black(), LV_STATE_CHECKED);
+    lv_obj_set_style_bg_opa(button, LV_OPA_COVER, LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(button, lv_color_white(), LV_STATE_CHECKED);
+
+    lv_obj_t *label = lv_label_create(button);
+    lv_label_set_text(label, text);
+    lv_obj_center(label);
+
+    lv_group_add_obj(group, button);
+    lv_obj_add_event_cb(button, frequency_button_event_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(button, focus_event_cb, LV_EVENT_FOCUSED, NULL);
+    return button;
+}
 
 static void lvgl_event_cb(lv_event_t *evt)
 {
@@ -207,18 +261,45 @@ static void home_page_init(void)
         lv_group_add_obj(group, voltage_spinbox);
         lv_obj_add_event_cb(voltage_spinbox, lvgl_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
+        // 频率
+        lv_obj_t *frequency_label = lv_label_create(lv_screen_active());
+        lv_label_set_text(frequency_label, "频率");
+        lv_obj_set_width(frequency_label, 24);
+        lv_obj_set_style_text_align(frequency_label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_align(frequency_label, LV_ALIGN_TOP_LEFT, 0, 80);
+
+        frequency_30_button = frequency_button_create(lv_screen_active(), "30Hz", 40);
+        frequency_60_button = frequency_button_create(lv_screen_active(), "60Hz", 91);
+
+        // 使用下划线表示编码器当前焦点
+        highlight_frame = lv_obj_create(lv_screen_active());
+        lv_obj_set_size(highlight_frame, 32, 1);
+        lv_obj_align(highlight_frame, LV_ALIGN_TOP_LEFT, 29, 77);
+        lv_obj_set_style_pad_all(highlight_frame, 0, 0);
+        lv_obj_set_style_radius(highlight_frame, 0, 0);
+        lv_obj_set_style_border_width(highlight_frame, 0, 0);
+        lv_obj_set_style_bg_color(highlight_frame, lv_color_black(), 0);
+        lv_obj_set_style_bg_opa(highlight_frame, LV_OPA_COVER, 0);
+        lv_obj_add_flag(highlight_frame, LV_OBJ_FLAG_FLOATING);
+        lv_obj_clear_flag(highlight_frame, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_clear_flag(highlight_frame, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_move_to_index(highlight_frame, 0);
+
+        lv_obj_add_event_cb(voltage_spinbox, focus_event_cb, LV_EVENT_FOCUSED, NULL);
+        lv_group_focus_obj(voltage_spinbox);
+
         // 功率
         lv_obj_t *p_label = lv_label_create(lv_screen_active());
         lv_label_set_text(p_label, "功率");
         lv_obj_set_width(p_label, 24);
         lv_obj_set_style_text_align(p_label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_align(p_label, LV_ALIGN_TOP_LEFT, 0, 80);
+        lv_obj_align(p_label, LV_ALIGN_TOP_LEFT, 0, 96);
 
         power_label = lv_label_create(lv_screen_active());
         lv_label_set_text_static(power_label, buf_power);
         lv_obj_set_width(power_label, 54);
         lv_obj_set_style_text_align(power_label, LV_TEXT_ALIGN_LEFT, 0);
-        lv_obj_align(power_label, LV_ALIGN_TOP_LEFT, 24, 80);
+        lv_obj_align(power_label, LV_ALIGN_TOP_LEFT, 31, 96);
 
         // 页脚
         lv_obj_t *my_label = lv_label_create(lv_scr_act());
