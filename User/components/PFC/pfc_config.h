@@ -15,14 +15,14 @@
 #define PFC_PWM_PERIOD          PWM_Period   /**< HRTIM 周期 */
 #define PFC_PWM_FREQ            20000.0f     /**< PWM 开关频率 (Hz) */
 #define PFC_DUTY_MIN            0.02f        /**< 最小占空比 (防止脉冲丢失) */
-#define PFC_DUTY_MAX            0.95f        /**< 最大占空比 (留死区余量) */
+#define PFC_DUTY_MAX            0.98f        /**< 最大占空比 (留死区余量) */
 
 /* ==================== 功率电路参数 ==================== */
 #define PFC_INDUCTOR_UH         1000.0f      /**< 升压电感 (uH), 按实际值修改 */
 #define PFC_CAPACITOR_UF        1000.0f      /**< 输出电容 (uF), 按实际值修改 */
-#define PFC_NOMINAL_VIN_RMS     20.0f        /**< 额定输入电压 RMS (V) */
-#define PFC_NOMINAL_VOUT        40.0f        /**< 额定输出电压 DC (V) */
-#define PFC_MAX_CURRENT_A       3.0f         /**< 最大输入电流 RMS (A) */
+#define PFC_NOMINAL_VIN_RMS     36.0f        /**< 额定输入电压 RMS (V) */
+#define PFC_NOMINAL_VOUT        65.0f        /**< 额定输出电压 DC (V) */
+#define PFC_MAX_CURRENT_A       4.0f         /**< 最大输入电流 RMS (A) */
 
 /* ==================== ADC 采样参数 ==================== */
 /*
@@ -42,11 +42,11 @@
 #define PFC_IIN_LSB_PER_A       180.2f        /**< 1A 对应 ADC LSB 数 */
 
 /*
- * ADC3_IN6 (DC 电压): 衰减 20×, 参考 GND (无偏置)
- *   Vout = raw / 68.27
+ * ADC3_IN6 (DC 电压): 衰减 30×, 参考 GND (无偏置)
+ *   Vout = raw / 45.51 (30*4096/3)
  */
 #define PFC_VOUT_OFFSET         0.0f
-#define PFC_VOUT_LSB_PER_V      68.27f
+#define PFC_VOUT_LSB_PER_V      45.51f
 
 /*
  * ADC4_IN8 (DC 电流), 参考 GND
@@ -65,15 +65,15 @@
 /* ==================== PI 默认参数 ==================== */
 /* 电流内环 (20kHz), 带宽 ~2kHz */
 #define PFC_I_KP_DEFAULT        0.2f
-#define PFC_I_KI_DEFAULT        0.2f
-#define PFC_I_INTEGRAL_MAX      2.0f
+#define PFC_I_KI_DEFAULT        1.0f
+#define PFC_I_INTEGRAL_MAX      2000.0f
 #define PFC_I_OUTPUT_MAX        0.5f
 
 /* 电压外环 (100Hz), 带宽 ~15Hz */
 #define PFC_V_KP_DEFAULT        0.2f
 #define PFC_V_KI_DEFAULT        0.8f
 #define PFC_V_KD_DEFAULT        0.05f
-#define PFC_V_INTEGRAL_MAX      10.0f
+#define PFC_V_INTEGRAL_MAX      100.0f
 #define PFC_V_OUTPUT_MAX        3.0f
 
 /* ==================== 过零换向参数 ==================== */
