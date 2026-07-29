@@ -10,9 +10,9 @@
 
 extern QueueHandle_t adc_queue;
 
-static pid_ctrl_block_handle_t pid_handle[3];
-QueueHandle_t pid_ctrl_queue_mV = NULL; //单位为mV
-float now_voltage_mV[3] = {0.0f}; // [0]=Va, [1]=Vb, [2]=Vc (mV)
+static pid_ctrl_block_handle_t line_voltage_pid;
+QueueHandle_t pid_ctrl_queue_mV = NULL; // 线电压有效值，单位为mV
+float now_voltage_mV[3] = {0.0f}; // [0]=Vab, [1]=Vbc, [2]=Vca (mV)
 float now_current_A[3] = {0.0f}; // [0]=Ia, [1]=Ib, [2]=Ic (A)
 
 // --- 定义常量 ---
@@ -189,14 +189,14 @@ float get_voltage_value(uint8_t index)
 }
 
 
-// 把DMA块数据转换为三相电压/电流工程量，并做电压去噪
+// 把DMA块数据转换为三路线电压/相电流工程量，并做电压去噪
 // adc12_data: ADC1(low 16b) + ADC2(high 16b) 双同步模式
-//   - 偶数字: rank1 = Va|Vb, 奇数字: rank2 = Ia|Ib
+//   - 偶数字: rank1 = Vab|Vbc, 奇数字: rank2 = Ia|Ib
 // adc3_data: ADC3 独立DMA
-//   - 偶数字: rank1 = Vc,      奇数字: rank2 = Ic
+//   - 偶数字: rank1 = Vca,      奇数字: rank2 = Ic
 static void adc_data_process(uint32_t *adc12_data, uint16_t *adc3_data)
 {
-    static kalman_1d_state_t kf_voltage[3]; // A, B, C 相电压卡尔曼
+    static kalman_1d_state_t kf_voltage[3]; // AB, BC, CA 线电压卡尔曼
     static kalman_1d_state_t kf_current[3]; // A, B, C 相电流卡尔曼
     static uint8_t is_kf_initialized = 0;
 
@@ -242,11 +242,12 @@ static void adc_data_process(uint32_t *adc12_data, uint16_t *adc3_data)
     // 预计算倒数，用乘法替代 6 次除法
     const float inv_N = 1.0f / (float)SAMPLE_COUNT;
 
-    // 三相电压 RMS 系数: 基础系数 * 示波器实测值 / MCU 测量值
+    // 三路线电压 RMS 系数。分别按 28.5 * 示波器实测值 / MCU测量值进行标定。
+    // 相电压通道原有校准值不能直接用于重新接线后的线电压通道。
     static const float voltage_rms_coef[3] = {
-        28.272f, // A: 28.5 * 9.92 / 10.00
-        28.301f, // B: 28.5 * 9.93 / 10.00
-        28.415f, // C: 28.5 * 9.97 / 10.00
+        28.5f, // Vab
+        28.5f, // Vbc
+        28.5f, // Vca
     };
 
     // 电流 RMS 系数
@@ -300,8 +301,7 @@ static void PID_ctrl_routine(void *pvParameters)
 {
     static uint32_t target_voltage_mV = 0;
     static uint32_t target_voltage_buffer_mV = 0;
-
-    static float output[3];
+    static float modulation;
 
     static adc_dma_block_t dma_block;
     set_mod_ratio_by_factor(0.0f, 0.0f, 0.0f);
@@ -316,25 +316,21 @@ static void PID_ctrl_routine(void *pvParameters)
                 if(target_voltage_mV != target_voltage_buffer_mV)
                 {
                     target_voltage_mV = target_voltage_buffer_mV;
-                    // for(uint8_t ph = 0; ph < 3; ph++)
-                    // pid_reset_ctrl_block(pid_handle[ph]); //使用增量式pid更改target后不能重置
                 }
             }
 
             //3. adc数据处理
             adc_data_process(dma_block.adc12_half, dma_block.adc3_half);
 
-            //4. 进行pid计算
-            for(uint8_t ph = 0; ph < 3; ph++)
-            {
-                float error_mV = (float)target_voltage_mV - now_voltage_mV[ph];
-                pid_compute(pid_handle[ph], error_mV, &output[ph]);
-                if(output[ph] < 0.0f)
-                    output[ph] = 0.0f;
-            }
-            set_mod_ratio_by_factor(output[0], output[1], output[2]);
+            // 线电压彼此耦合，使用三路线电压均值驱动一个公共电压环。
+            // 三个桥臂共用同一调制度，保持三相幅值一致和严格120°相位差。
+            const float line_voltage_feedback_mV =
+                    (now_voltage_mV[0] + now_voltage_mV[1] + now_voltage_mV[2]) / 3.0f;
+            const float error_mV = (float)target_voltage_mV - line_voltage_feedback_mV;
+            pid_compute(line_voltage_pid, error_mV, &modulation);
+            set_mod_ratio_by_factor(modulation, modulation, modulation);
 
-            LOGI("PID", "%.3f, %.3f, %.3f", output[0], output[1], output[2]);
+            LOGI("PID", "Vll=%.1fmV, mod=%.3f", line_voltage_feedback_mV, modulation);
             HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
         }
     }
@@ -355,33 +351,30 @@ void pid_set_param(float kp, float ki, float kd)
         .kd           = kd,
         .max_output   = 0.98f,
         .min_output   = 0.0f,
-        .max_integral = 100000.0f,
-        .min_integral = -100000.0f,
+        .max_integral = 1000000.0f,
+        .min_integral = -1000000.0f,
         .cal_type     = PID_CAL_TYPE_POSITIONAL,
     };
-    for(uint8_t ph = 0; ph < 3; ph++)
-        pid_update_parameters(pid_handle[ph], &param);
+    pid_update_parameters(line_voltage_pid, &param);
 }
 
 void pid_ctrl_init(void)
 {
     pid_ctrl_config_t pid_cfg = {
         .init_param = {
-            .kp           = 0.0001f,
-            .ki           = 0.000012f,
-            .kd           = 0.00005f,
+            // 线电压对象的增益约为相电压对象的sqrt(3)倍。
+            .kp           = 0.000057735f,
+            .ki           = 0.000006928f,
+            .kd           = 0.000028868f,
             .max_output   = 0.98f,
             .min_output   = 0.0f,
-            .max_integral = 100000.0f,
-            .min_integral = -100000.0f,
+            .max_integral = 1000000.0f,
+            .min_integral = -1000000.0f,
             .cal_type     = PID_CAL_TYPE_POSITIONAL,
         }
     };
-    for(uint8_t ph = 0; ph < 3; ph++)
-    {
-        pid_new_control_block(&pid_cfg, &pid_handle[ph]);
-        pid_reset_ctrl_block(pid_handle[ph]);
-    }
+    pid_new_control_block(&pid_cfg, &line_voltage_pid);
+    pid_reset_ctrl_block(line_voltage_pid);
 
     pid_ctrl_queue_mV = xQueueCreate(6, sizeof(uint32_t));
     xTaskCreate(PID_ctrl_routine, "PID", 2048, NULL, 15, NULL);

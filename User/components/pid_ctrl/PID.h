@@ -16,6 +16,7 @@ typedef struct {
 
 void pid_ctrl_init(void);
 
+/** @brief 设置三相线电压有效值目标，单位mV */
 void pid_set_voltage(uint32_t mv);
 
 void pid_set_param(float kp, float ki, float kd);
