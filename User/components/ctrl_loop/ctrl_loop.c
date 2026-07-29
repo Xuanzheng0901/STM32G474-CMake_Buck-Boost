@@ -211,6 +211,28 @@ static void ctrl_loop_sync_delay_step(float32_t vin_inst, uint8_t pll_polarity)
     }
 }
 
+static float32_t ctrl_loop_unity_pf_wave(void)
+{
+    float32_t voltage_peak_pu = fabsf(spll.u_D[0]);
+    float32_t min_voltage_peak_pu =
+        (PFC_UVP_VIN_RMS * 1.41421356f) / PFC_SOGI_VOLT_PER_UNIT;
+
+    if(voltage_peak_pu < min_voltage_peak_pu)
+        return 0.0f;
+
+    /*
+     * osg_u 是与当前电网电压同相的 SOGI 输出，u_D 是其峰值。
+     * 不直接使用 cosine，因为 SOGI_run() 返回前已将 PLL 相角推进一拍。
+     */
+    float32_t ref_wave = spll.osg_u[0] / voltage_peak_pu;
+    if(ref_wave > 1.0f)
+        ref_wave = 1.0f;
+    else if(ref_wave < -1.0f)
+        ref_wave = -1.0f;
+
+    return ref_wave;
+}
+
 /* ==================== AC 采样 ISR (20kHz) ==================== */
 
 void ctrl_loop_ac_isr(uint32_t adc_word)
@@ -229,8 +251,8 @@ void ctrl_loop_ac_isr(uint32_t adc_word)
     /* 慢桥臂极性 (基于电压过零) */
     uint8_t polarity = (spll.cosine * pol_cos_off >= spll.sine * pol_sin_off) ? 0 : 1;
 
-    /* PF 固定为 1: 电流参考与 PLL 提取的电网电压基波同相。 */
-    float32_t ref_wave = spll.cosine;
+    /* PF 固定为 1: 由 SOGI 同相电压生成单位幅值电流参考。 */
+    float32_t ref_wave = ctrl_loop_unity_pf_wave();
     float32_t abs_ref = fabsf(ref_wave);
     uint8_t i_sign = (ref_wave >= 0.0f) ? 0 : 1;
 
