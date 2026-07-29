@@ -14,15 +14,15 @@
 /* ==================== PWM 参数 ==================== */
 #define PFC_PWM_PERIOD          PWM_Period   /**< HRTIM 周期 */
 #define PFC_PWM_FREQ            20000.0f     /**< PWM 开关频率 (Hz) */
-#define PFC_DUTY_MIN            0.02f        /**< 最小占空比 (防止脉冲丢失) */
-#define PFC_DUTY_MAX            0.98f        /**< 最大占空比 (留死区余量) */
+#define PFC_DUTY_MIN            0.001f        /**< 最小占空比 (防止脉冲丢失) */
+#define PFC_DUTY_MAX            0.999f        /**< 最大占空比 (留死区余量) */
 
 /* ==================== 功率电路参数 ==================== */
 #define PFC_INDUCTOR_UH         1000.0f      /**< 升压电感 (uH), 按实际值修改 */
 #define PFC_CAPACITOR_UF        1000.0f      /**< 输出电容 (uF), 按实际值修改 */
 #define PFC_NOMINAL_VIN_RMS     36.0f        /**< 额定输入电压 RMS (V) */
 #define PFC_NOMINAL_VOUT        65.0f        /**< 额定输出电压 DC (V) */
-#define PFC_MAX_CURRENT_A       4.0f         /**< 最大输入电流 RMS (A) */
+#define PFC_MAX_CURRENT_A       6.0f         /**< 最大输入电流 RMS (A) */
 
 /* ==================== ADC 采样参数 ==================== */
 /*
@@ -64,18 +64,18 @@
 
 /* ==================== 控制器默认参数 ==================== */
 /* 电流内环: 50Hz 准 PR，带宽参数决定谐振峰宽度而非电流环总带宽 */
-#define PFC_I_PR_KP_DEFAULT       0.2f
-#define PFC_I_PR_KR_DEFAULT       0.1f
+#define PFC_I_PR_KP_DEFAULT       0.1f
+#define PFC_I_PR_KR_DEFAULT       20.0f
 #define PFC_I_PR_FREQ_HZ          50.0f
-#define PFC_I_PR_BANDWIDTH_HZ     5.0f
-#define PFC_I_OUTPUT_MAX          0.5f
+#define PFC_I_PR_BANDWIDTH_HZ     1.5f
+#define PFC_I_OUTPUT_MAX          0.1f
 
 /* 电压外环 (100Hz), 带宽 ~15Hz */
 #define PFC_V_KP_DEFAULT        0.2f
 #define PFC_V_KI_DEFAULT        0.8f
 #define PFC_V_KD_DEFAULT        0.05f
 #define PFC_V_INTEGRAL_MAX      100.0f
-#define PFC_V_OUTPUT_MAX        3.0f
+#define PFC_V_OUTPUT_MAX        5.0f
 
 /* ==================== 过零换向参数 ==================== */
 #define PFC_MIN_RUN_VOUT_V          3.0f    /**< 母线低于此值时保持功率管关闭 */
@@ -92,6 +92,6 @@
 #define PFC_FAULT_RETRY_MS      5000        /**< 故障后重试间隔 (ms) */
 
 /* ==================== 调试选项 ==================== */
-#define PFC_DEBUG_DAC_OUTPUT    1           /**< 设为 1 启用 ISR 中 DAC 调试输出 */
+#define PFC_DEBUG_DAC_OUTPUT    0           /**< 设为 1 启用 ISR 中 DAC 调试输出 */
 
 #endif /* __PFC_CONFIG_H__ */
