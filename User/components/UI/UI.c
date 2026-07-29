@@ -2,6 +2,7 @@
 #include "lvgl.h"
 #include "lv_port_disp.h"
 #include "FreeRTOS.h"
+#include "hrtim.h"
 #include "task.h"
 #include "lv_port_encoder.h"
 #include "tim.h"
@@ -37,7 +38,28 @@ static char buf_power[10] = "   0.0W";
 
 void ui_frequency_changed_cb(uint32_t frequency_hz)
 {
-    (void)frequency_hz;
+    if(frequency_hz == 30)
+    {
+        HAL_HRTIM_WaveformCountStop(
+            &hhrtim1, HRTIM_TIMERID_MASTER | HRTIM_TIMERID_TIMER_A | HRTIM_TIMERID_TIMER_B | HRTIM_TIMERID_TIMER_C);
+        __HAL_HRTIM_SETCLOCKPRESCALER(&hhrtim1, HRTIM_TIMERINDEX_MASTER, HRTIM_PRESCALERRATIO_MUL4);
+        __HAL_HRTIM_SETCLOCKPRESCALER(&hhrtim1, HRTIM_TIMERINDEX_TIMER_A, HRTIM_PRESCALERRATIO_MUL4);
+        __HAL_HRTIM_SETCLOCKPRESCALER(&hhrtim1, HRTIM_TIMERINDEX_TIMER_B, HRTIM_PRESCALERRATIO_MUL4);
+        __HAL_HRTIM_SETCLOCKPRESCALER(&hhrtim1, HRTIM_TIMERINDEX_TIMER_C, HRTIM_PRESCALERRATIO_MUL4);
+        HAL_HRTIM_WaveformCountStart(
+            &hhrtim1, HRTIM_TIMERID_MASTER | HRTIM_TIMERID_TIMER_A | HRTIM_TIMERID_TIMER_B | HRTIM_TIMERID_TIMER_C);
+    }
+    else if(frequency_hz == 60)
+    {
+        HAL_HRTIM_WaveformCountStop(
+            &hhrtim1, HRTIM_TIMERID_MASTER | HRTIM_TIMERID_TIMER_A | HRTIM_TIMERID_TIMER_B | HRTIM_TIMERID_TIMER_C);
+        __HAL_HRTIM_SETCLOCKPRESCALER(&hhrtim1, HRTIM_TIMERINDEX_MASTER, HRTIM_PRESCALERRATIO_MUL8);
+        __HAL_HRTIM_SETCLOCKPRESCALER(&hhrtim1, HRTIM_TIMERINDEX_TIMER_A, HRTIM_PRESCALERRATIO_MUL8);
+        __HAL_HRTIM_SETCLOCKPRESCALER(&hhrtim1, HRTIM_TIMERINDEX_TIMER_B, HRTIM_PRESCALERRATIO_MUL8);
+        __HAL_HRTIM_SETCLOCKPRESCALER(&hhrtim1, HRTIM_TIMERINDEX_TIMER_C, HRTIM_PRESCALERRATIO_MUL8);
+        HAL_HRTIM_WaveformCountStart(
+            &hhrtim1, HRTIM_TIMERID_MASTER | HRTIM_TIMERID_TIMER_A | HRTIM_TIMERID_TIMER_B | HRTIM_TIMERID_TIMER_C);
+    }
     /* TODO: 在此补全 30 Hz / 60 Hz 的实际切换逻辑。 */
 }
 
@@ -270,6 +292,7 @@ static void home_page_init(void)
 
         frequency_30_button = frequency_button_create(lv_screen_active(), "30Hz", 40);
         frequency_60_button = frequency_button_create(lv_screen_active(), "60Hz", 91);
+        lv_obj_add_state(frequency_60_button, LV_STATE_CHECKED);
 
         // 使用下划线表示编码器当前焦点
         highlight_frame = lv_obj_create(lv_screen_active());
