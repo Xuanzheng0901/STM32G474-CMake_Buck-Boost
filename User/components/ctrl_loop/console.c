@@ -2,7 +2,7 @@
  * @file    console.c
  * @brief   串口控制台: 运行时参数调谐
  *          命令: V/P <Kp> <Ki> [Kd]  — 电压环 PID
- *                I   <Kp> <Ki>       — 电流环 PI
+ *                I   <Kp> <Kr> <BW>  — 电流环准 PR
  */
 
 #include "console.h"
@@ -61,14 +61,16 @@ static void console_task(void *pvParameters)
 
             case 'i':
             case 'I':
-                if(n >= 3)
+                if(n >= 4)
                 {
-                    ctrl_loop_set_current_pi(a, b);
-                    LOGI("console", "电流环 PI: Kp=%.3f Ki=%.3f", a, b);
+                    if(ctrl_loop_set_current_pr(a, b, c))
+                        LOGI("console", "电流环 PR: Kp=%.3f Kr=%.3f BW=%.3fHz", a, b, c);
+                    else
+                        LOGE("console", "PR 参数无效");
                 }
                 else
                 {
-                    LOGE("console", "格式: I <Kp> <Ki>");
+                    LOGE("console", "格式: I <Kp> <Kr> <BW_Hz>");
                 }
                 break;
 

@@ -3,8 +3,8 @@
  * @brief   图腾柱 PFC 控制回路
  *
  * ── 电流内环 (20kHz ISR) ──
- *     Iref = I_amplitude × |sin(ωt)|
- *     Duty = D_ideal + PI(|Iref| - |IL|)
+ *     Iref = I_amplitude × sin(ωt)
+ *     Duty = D_ideal + sign(Vin) × PR(Iref - IL)
  *
  * ── 电压外环 (~100Hz 任务) ──
  *     状态机 → Vref → PI(Vref - Vout) → I_amplitude
@@ -16,6 +16,7 @@
 #include "pfc_config.h"
 #include "pfc_utils.h"
 #include "pid_ctrl_internal.h"
+#include "pr_ctrl.h"
 #include "sogi.h"
 
 #include "FreeRTOS.h"
@@ -29,7 +30,7 @@ extern QueueHandle_t ADC_get_dc_queue(void);
 
 /* ==================== 内部状态 ==================== */
 
-static pid_ctrl_block_handle_t i_pid;   /* 电流内环 PI */
+static pr_ctrl_t i_pr;                  /* 电流内环准 PR */
 static pid_ctrl_block_handle_t v_pid;   /* 电压外环 PID */
 
 static float32_t i_amplitude;           /* 电流参考幅值 */
@@ -55,13 +56,6 @@ static uint16_t comm_stable_samples;
 
 /* ==================== 辅助宏 ==================== */
 
-/* 生成 PID 配置: 电流内环 */
-#define I_PID_CFG(kp_, ki_ts_) { \
-    .kp = kp_, .ki = ki_ts_, .kd = 0.0f, \
-    .max_output = PFC_I_OUTPUT_MAX,  .min_output = -PFC_I_OUTPUT_MAX, \
-    .max_integral = PFC_I_INTEGRAL_MAX, .min_integral = -PFC_I_INTEGRAL_MAX, \
-    .cal_type = PID_CAL_TYPE_INCREMENTAL }
-
 /* 生成 PID 配置: 电压外环 */
 #define V_PID_CFG(kp_, ki_ts_, kd_) { \
     .kp = kp_, .ki = ki_ts_, .kd = kd_, \
@@ -79,7 +73,7 @@ static void ctrl_loop_reset_comm_validation(void)
 static void ctrl_loop_hold_power_stage_off(void)
 {
     pfc_power_stage_disable();
-    pid_reset_ctrl_block(i_pid);
+    pr_ctrl_reset(&i_pr);
 
     duty_current = 0.0f;
     hw_polarity = 0xFFU;
@@ -162,11 +156,8 @@ void ctrl_loop_ac_isr(uint32_t adc_word)
     /* 慢桥臂极性 (基于电压过零) */
     uint8_t polarity = (spll.cosine * pol_cos_off >= spll.sine * pol_sin_off) ? 0 : 1;
 
-    /* PF 固定为 1: 单位幅值参考与当前电网电压采样同相。 */
-    float32_t abs_ref = fabsf(ref_wave);
-    uint8_t i_sign = (ref_wave >= 0.0f) ? 0 : 1;
-
-    ctrl_loop_current_isr(v_filt, i_filt, now_vout_V, abs_ref, polarity, i_sign);
+    /* PF 固定为 1: 有符号电流参考与当前电网电压采样同相。 */
+    ctrl_loop_current_isr(v_filt, i_filt, now_vout_V, ref_wave, polarity);
 }
 
 /* ==================== DC 数据处理 (任务上下文) ==================== */
@@ -215,11 +206,17 @@ static void ctrl_loop_routine(void *pvParameters)
 
 void ctrl_loop_init(void)
 {
-    /* 电流内环 PI */
-    pid_ctrl_parameter_t i_param = I_PID_CFG(PFC_I_KP_DEFAULT,
-                                             PFC_I_KI_DEFAULT / PFC_PWM_FREQ);
-    pid_ctrl_config_t i_cfg = {.init_param = i_param};
-    pid_new_control_block(&i_cfg, &i_pid);
+    /* 电流内环准 PR */
+    if(!pr_ctrl_configure(&i_pr,
+                          PFC_I_PR_KP_DEFAULT,
+                          PFC_I_PR_KR_DEFAULT,
+                          PFC_I_PR_FREQ_HZ,
+                          PFC_I_PR_BANDWIDTH_HZ,
+                          PFC_PWM_FREQ,
+                          PFC_I_OUTPUT_MAX))
+    {
+        Error_Handler();
+    }
 
     /* 电压外环 PID */
     float v_ts = 1.0f / PFC_VOLTAGE_LOOP_FREQ;
@@ -254,8 +251,8 @@ CtrlLoop_State ctrl_loop_get_state(void)
 /* ---- 电流内环 (20kHz ISR) ---- */
 
 void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
-                           float32_t vout, float32_t abs_ref,
-                           uint8_t polarity, uint8_t i_sign)
+                           float32_t vout, float32_t ref_wave,
+                           uint8_t polarity)
 {
     if((ctrl_loop_state_get() == CTRL_STATE_FAULT) ||
        (vout < PFC_MIN_RUN_VOUT_V))
@@ -299,19 +296,25 @@ void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
         ctrl_loop_enter_slow_blank();
     }
 
-    float i_fb = (i_sign == 0U) ? il_inst : -il_inst;
-    float i_ref = i_amplitude * abs_ref;
-    float i_corr;
-    pid_compute(i_pid, i_ref - i_fb, &i_corr);
+    float i_ref = i_amplitude * ref_wave;
+    float i_corr_signed = pr_ctrl_compute(&i_pr, i_ref - il_inst);
 
-    /* PF=1 正向 Boost 前馈。 */
+    /*
+     * PR 在静止坐标系输出有符号校正量。负半周增大电流绝对值仍需增大
+     * Boost 占空比，因此写入功率级前按半周符号折算为幅值校正。
+     */
+    float half_cycle_sign = (ref_wave >= 0.0f) ? 1.0f : -1.0f;
     float vin_abs = fabsf(vin_inst);
     float ff = 1.0f - vin_abs / vout;
-    duty_current = ff + i_corr;
+    duty_current = ff + half_cycle_sign * i_corr_signed;
+    if(duty_current > PFC_DUTY_MAX)
+        duty_current = PFC_DUTY_MAX;
+    else if(duty_current < PFC_DUTY_MIN)
+        duty_current = PFC_DUTY_MIN;
 
 #if PFC_DEBUG_DAC_OUTPUT
     HAL_DAC_SetValue(&hdac3, DAC_CHANNEL_2, DAC_ALIGN_12B_R,
-                     (uint16_t)(duty_current * 4096.0f));
+                     (uint16_t)(duty_current * 4095.0f));
 #endif
     pfc_write_duty(duty_current, polarity);
 }
@@ -330,10 +333,29 @@ void ctrl_loop_set_polarity_offset(float32_t deg)
     pol_sin_off = arm_sin_f32(rad);
 }
 
-void ctrl_loop_set_current_pi(float32_t kp, float32_t ki)
+bool ctrl_loop_set_current_pr(float32_t kp, float32_t kr, float32_t bandwidth_hz)
 {
-    pid_ctrl_parameter_t p = I_PID_CFG(kp, ki / PFC_PWM_FREQ);
-    pid_update_parameters(i_pid, &p);
+    pr_ctrl_t updated;
+    if(!pr_ctrl_configure(&updated,
+                          kp,
+                          kr,
+                          PFC_I_PR_FREQ_HZ,
+                          bandwidth_hz,
+                          PFC_PWM_FREQ,
+                          PFC_I_OUTPUT_MAX))
+    {
+        return false;
+    }
+
+    /*
+     * 参数来自任务上下文，而控制器状态在 ADC ISR 中更新。
+     * 完整结构体替换期间短暂关中断，避免 ISR 读到一半新、一半旧的系数。
+     */
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    i_pr = updated;
+    __set_PRIMASK(primask);
+    return true;
 }
 
 void ctrl_loop_set_voltage_pi(float32_t kp, float32_t ki, float32_t kd)

@@ -16,7 +16,7 @@ static uint32_t dc_adc_buf[ADC_BUFFER_LENGTH];
 
 QueueHandle_t dc_adc_queue;
 
-/* ---- ADC12 交流侧 ISR: 逐周期控制 (30kHz) ---- */
+/* ---- ADC12 交流侧 ISR: 逐周期控制 (20kHz) ---- */
 
 static inline void ac_isr(uint32_t adc_word)
 {

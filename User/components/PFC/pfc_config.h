@@ -62,12 +62,13 @@
 #define PFC_VOLTAGE_LOOP_FREQ   100.0f       /**< 电压外环频率 (Hz) */
 #define PFC_SOFTSTART_SEC       1.0f         /**< 软启动持续时间 (s) */
 
-/* ==================== PI 默认参数 ==================== */
-/* 电流内环 (20kHz), 带宽 ~2kHz */
-#define PFC_I_KP_DEFAULT        0.2f
-#define PFC_I_KI_DEFAULT        1.0f
-#define PFC_I_INTEGRAL_MAX      2000.0f
-#define PFC_I_OUTPUT_MAX        0.5f
+/* ==================== 控制器默认参数 ==================== */
+/* 电流内环: 50Hz 准 PR，带宽参数决定谐振峰宽度而非电流环总带宽 */
+#define PFC_I_PR_KP_DEFAULT       0.2f
+#define PFC_I_PR_KR_DEFAULT       0.1f
+#define PFC_I_PR_FREQ_HZ          50.0f
+#define PFC_I_PR_BANDWIDTH_HZ     5.0f
+#define PFC_I_OUTPUT_MAX          0.5f
 
 /* 电压外环 (100Hz), 带宽 ~15Hz */
 #define PFC_V_KP_DEFAULT        0.2f
