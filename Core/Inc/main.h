@@ -61,7 +61,7 @@ void pid_ctrl_init(void);
 
 /* Private defines -----------------------------------------------------------*/
 #define Handle1 hhrtim1
-#define PWM_Period 44800
+#define PWM_Period 36000
 #define LED_Pin GPIO_PIN_0
 #define LED_GPIO_Port GPIOC
 #define SPI1_RESET_Pin GPIO_PIN_4
