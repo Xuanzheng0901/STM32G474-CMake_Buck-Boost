@@ -1,4 +1,5 @@
 #include "pid_ctrl_internal.h"
+#include <stdbool.h>
 #include "FreeRTOS.h"
 #include "arm_math.h"
 #include "hrtim.h"
@@ -14,9 +15,12 @@ static pid_ctrl_block_handle_t line_voltage_pid;
 QueueHandle_t pid_ctrl_queue_mV = NULL; // 线电压有效值，单位为mV
 float now_voltage_mV[3] = {0.0f}; // [0]=Vab, [1]=Vbc, [2]=Vca (mV)
 float now_current_A[3] = {0.0f}; // [0]=Ia, [1]=Ib, [2]=Ic (A)
+static volatile bool pg;
 
 // --- 定义常量 ---
 #define TABLE_SIZE 600
+#define PG_GPIO_PORT GPIOD
+#define PG_GPIO_PIN GPIO_PIN_9
 
 static uint32_t a_sine_table[TABLE_SIZE] = {0};
 static uint32_t b_sine_table[TABLE_SIZE] = {0};
@@ -306,6 +310,7 @@ static void PID_ctrl_routine(void *pvParameters)
     static uint32_t target_voltage_mV = 0;
     static uint32_t target_voltage_buffer_mV = 0;
     static float modulation;
+    static bool power_was_good = true;
 
     static adc_dma_block_t dma_block;
     set_mod_ratio_by_factor(0.0f, 0.0f, 0.0f);
@@ -314,6 +319,15 @@ static void PID_ctrl_routine(void *pvParameters)
         //1. 等待ADC数据
         if(xQueueReceive(adc_queue, &dma_block, portMAX_DELAY) == pdTRUE)
         {
+            const bool power_is_good =
+                    HAL_GPIO_ReadPin(PG_GPIO_PORT, PG_GPIO_PIN) == GPIO_PIN_SET;
+            pg = power_is_good;
+            if(!power_is_good && power_was_good)
+                pid_set_voltage(0U);
+            else if(power_is_good && !power_was_good)
+                pid_reset_ctrl_block(line_voltage_pid);
+            power_was_good = power_is_good;
+
             //2. 查询target是否改变
             if(pdPASS == xQueueReceive(pid_ctrl_queue_mV, &target_voltage_buffer_mV, 0))
             {
@@ -344,7 +358,14 @@ void pid_set_voltage(uint32_t mv)
 {
     if(NULL == pid_ctrl_queue_mV)
         return;
-    xQueueSend(pid_ctrl_queue_mV, &mv, portMAX_DELAY);
+    if(HAL_GPIO_ReadPin(PG_GPIO_PORT, PG_GPIO_PIN) != GPIO_PIN_SET)
+        mv = 0U;
+    xQueueOverwrite(pid_ctrl_queue_mV, &mv);
+}
+
+bool pid_is_power_good(void)
+{
+    return pg;
 }
 
 void pid_set_param(float kp, float ki, float kd)
@@ -380,7 +401,8 @@ void pid_ctrl_init(void)
     pid_new_control_block(&pid_cfg, &line_voltage_pid);
     pid_reset_ctrl_block(line_voltage_pid);
 
-    pid_ctrl_queue_mV = xQueueCreate(6, sizeof(uint32_t));
+    pg = HAL_GPIO_ReadPin(PG_GPIO_PORT, PG_GPIO_PIN) == GPIO_PIN_SET;
+    pid_ctrl_queue_mV = xQueueCreate(1, sizeof(uint32_t));
     xTaskCreate(PID_ctrl_routine, "PID", 2048, NULL, 15, NULL);
     pid_set_voltage(0);
 }

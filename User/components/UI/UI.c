@@ -24,6 +24,7 @@ static lv_obj_t *ia_label = NULL;
 static lv_obj_t *ib_label = NULL;
 static lv_obj_t *ic_label = NULL;
 static lv_obj_t *power_label = NULL;
+static lv_obj_t *power_status_label = NULL;
 lv_obj_t *line_voltage_spinbox = NULL;
 lv_obj_t *frequency_30_button = NULL;
 lv_obj_t *frequency_60_button = NULL;
@@ -146,6 +147,15 @@ static void value_update_task(void *arg)
 
         if(lvgl_port_lock(portMAX_DELAY))
         {
+            const bool pg_good = pid_is_power_good();
+            if(!pg_good && lv_spinbox_get_value(line_voltage_spinbox) != 0)
+                lv_spinbox_set_value(line_voltage_spinbox, 0);
+
+            if(pg_good)
+                lv_obj_add_flag(power_status_label, LV_OBJ_FLAG_HIDDEN);
+            else
+                lv_obj_remove_flag(power_status_label, LV_OBJ_FLAG_HIDDEN);
+
             lv_label_set_text_static(vab_label, buf_vab);
             lv_label_set_text_static(vbc_label, buf_vbc);
             lv_label_set_text_static(vca_label, buf_vca);
@@ -331,6 +341,11 @@ static void home_page_init(void)
         lv_obj_set_style_text_font(my_label, &chillbit, 0);
         lv_obj_align(my_label, LV_ALIGN_BOTTOM_LEFT, 0, 0);
         lv_obj_set_width(my_label, 128);
+
+        power_status_label = lv_label_create(lv_scr_act());
+        lv_label_set_text(power_status_label, "欠压保护");
+        lv_obj_align(power_status_label, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+        lv_obj_add_flag(power_status_label, LV_OBJ_FLAG_HIDDEN);
 
         lvgl_port_unlock();
     }

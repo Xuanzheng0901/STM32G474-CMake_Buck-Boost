@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 12 px
  * Bpp: 1
- * Opts: --bpp 1 --size 12 --no-compress --font E:/Pluviophile/Downloads/fusion-pixel-font-12px-monospaced-ttf-v2026.02.27/fusion-pixel-12px-monospaced-zh_hans.ttf --symbols 电压流功率开机中关过热保护你好设定实际三相频线视在 --range 32-127 --format lvgl -o fusion_pixel_12.c
+ * Opts: --bpp 1 --size 12 --no-compress --font E:\Pluviophile\Downloads\fusion-pixel-font-12px-monospaced-ttf-v2026.02.27\fusion-pixel-12px-monospaced-zh_hans.ttf --symbols 电压流功率开机中关过热保护你好设定实际三相频线视在欠 --range 32-127 --format lvgl -o fusion_pixel_12.c
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE
@@ -363,6 +363,10 @@ static LV_ATTRIBUTE_LARGE_CONST const uint8_t glyph_bitmap[] = {
     0x27, 0x84, 0x93, 0xd2, 0x12, 0x42, 0x48, 0xc9,
     0x1d, 0x25, 0x24, 0x24, 0xa4, 0x94, 0xa3, 0x80,
 
+    /* U+6B20 "欠" */
+    0x20, 0x4, 0x0, 0xff, 0xa0, 0x18, 0x44, 0x8,
+    0x1, 0x0, 0x50, 0xa, 0x2, 0x23, 0x83, 0x80,
+
     /* U+6D41 "流" */
     0x82, 0xb, 0xfc, 0x10, 0x44, 0x25, 0xfa, 0x0,
     0x2, 0xa2, 0x54, 0x4a, 0x91, 0x56, 0x4b, 0x80,
@@ -534,7 +538,8 @@ static const lv_font_fmt_txt_glyph_dsc_t glyph_dsc[] = {
     {.bitmap_index = 743, .adv_w = 192, .box_w = 11, .box_h = 11, .ofs_x = 0, .ofs_y = -2},
     {.bitmap_index = 759, .adv_w = 192, .box_w = 11, .box_h = 11, .ofs_x = 0, .ofs_y = -2},
     {.bitmap_index = 775, .adv_w = 192, .box_w = 11, .box_h = 11, .ofs_x = 0, .ofs_y = -2},
-    {.bitmap_index = 791, .adv_w = 192, .box_w = 11, .box_h = 11, .ofs_x = 0, .ofs_y = -2}
+    {.bitmap_index = 791, .adv_w = 192, .box_w = 11, .box_h = 11, .ofs_x = 0, .ofs_y = -2},
+    {.bitmap_index = 807, .adv_w = 192, .box_w = 11, .box_h = 11, .ofs_x = 0, .ofs_y = -2}
 };
 
 /*---------------------
@@ -543,24 +548,24 @@ static const lv_font_fmt_txt_glyph_dsc_t glyph_dsc[] = {
 
 static const uint16_t unicode_list_1[] = {
     0x0, 0x24, 0x157, 0x1d4, 0x36a, 0x496, 0x582, 0x91f,
-    0xb74, 0xd91, 0xd95, 0x10f7, 0x149b, 0x1931, 0x1f38, 0x22e4,
-    0x257e, 0x272c, 0x28ef, 0x30b6, 0x3bbd, 0x3db5, 0x41be, 0x483c,
-    0x4a88
+    0xb74, 0xd91, 0xd95, 0x10f7, 0x149b, 0x1931, 0x1d17, 0x1f38,
+    0x22e4, 0x257e, 0x272c, 0x28ef, 0x30b6, 0x3bbd, 0x3db5, 0x41be,
+    0x483c, 0x4a88
 };
 
 /*Collect the unicode lists and glyph_id offsets*/
 static const lv_font_fmt_txt_cmap_t cmaps[] =
 {
     {
-        .range_start  = 32, .range_length        = 95, .glyph_id_start = 1,
-        .unicode_list = NULL, .glyph_id_ofs_list = NULL, .list_length  = 0, .type = LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY
+        .range_start = 32, .range_length = 95, .glyph_id_start = 1,
+        .unicode_list = NULL, .glyph_id_ofs_list = NULL, .list_length = 0, .type = LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY
     },
     {
-        .range_start  = 19977, .range_length               = 19081, .glyph_id_start = 96,
-        .unicode_list = unicode_list_1, .glyph_id_ofs_list = NULL, .list_length     = 25,
-        .type         = LV_FONT_FMT_TXT_CMAP_SPARSE_TINY
+        .range_start = 19977, .range_length = 19081, .glyph_id_start = 96,
+        .unicode_list = unicode_list_1, .glyph_id_ofs_list = NULL, .list_length = 26, .type = LV_FONT_FMT_TXT_CMAP_SPARSE_TINY
     }
 };
+
 
 
 /*--------------------
@@ -569,27 +574,28 @@ static const lv_font_fmt_txt_cmap_t cmaps[] =
 
 #if LVGL_VERSION_MAJOR == 8
 /*Store all the custom data of the font*/
-static lv_font_fmt_txt_glyph_cache_t cache;
+static  lv_font_fmt_txt_glyph_cache_t cache;
 #endif
 
 #if LVGL_VERSION_MAJOR >= 8
 static const lv_font_fmt_txt_dsc_t font_dsc = {
 #else
-    static lv_font_fmt_txt_dsc_t font_dsc = {
+static lv_font_fmt_txt_dsc_t font_dsc = {
 #endif
-    .glyph_bitmap  = glyph_bitmap,
-    .glyph_dsc     = glyph_dsc,
-    .cmaps         = cmaps,
-    .kern_dsc      = NULL,
-    .kern_scale    = 0,
-    .cmap_num      = 2,
-    .bpp           = 1,
-    .kern_classes  = 0,
+    .glyph_bitmap = glyph_bitmap,
+    .glyph_dsc = glyph_dsc,
+    .cmaps = cmaps,
+    .kern_dsc = NULL,
+    .kern_scale = 0,
+    .cmap_num = 2,
+    .bpp = 1,
+    .kern_classes = 0,
     .bitmap_format = 0,
 #if LVGL_VERSION_MAJOR == 8
     .cache = &cache
 #endif
 };
+
 
 
 /*-----------------
@@ -600,18 +606,18 @@ static const lv_font_fmt_txt_dsc_t font_dsc = {
 #if LVGL_VERSION_MAJOR >= 8
 const lv_font_t fusion_pixel_12 = {
 #else
-    lv_font_t fusion_pixel_12 = {
+lv_font_t fusion_pixel_12 = {
 #endif
-    .get_glyph_dsc    = lv_font_get_glyph_dsc_fmt_txt,    /*Function pointer to get glyph's data*/
+    .get_glyph_dsc = lv_font_get_glyph_dsc_fmt_txt,    /*Function pointer to get glyph's data*/
     .get_glyph_bitmap = lv_font_get_bitmap_fmt_txt,    /*Function pointer to get glyph's bitmap*/
-    .line_height      = 12,          /*The maximum line height required by the font*/
-    .base_line        = 2,             /*Baseline measured from the bottom of the line*/
+    .line_height = 11,          /*The maximum line height required by the font*/
+    .base_line = 2,             /*Baseline measured from the bottom of the line*/
 #if !(LVGL_VERSION_MAJOR == 6 && LVGL_VERSION_MINOR == 0)
     .subpx = LV_FONT_SUBPX_NONE,
 #endif
 #if LV_VERSION_CHECK(7, 4, 0) || LVGL_VERSION_MAJOR >= 8
-    .underline_position  = 0,
-    .underline_thickness = 0,
+    .underline_position = -2,
+    .underline_thickness = 1,
 #endif
     .dsc = &font_dsc,          /*The custom font data. Will be accessed by `get_glyph_bitmap/dsc` */
 #if LV_VERSION_CHECK(8, 2, 0) || LVGL_VERSION_MAJOR >= 9
