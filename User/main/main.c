@@ -31,8 +31,15 @@ void app_main(void)
     ctrl_loop_init();
     console_init();
 
-    HAL_HRTIM_WaveformCountStart(&hhrtim1, HRTIM_TIMERID_TIMER_A);
+    if(HAL_HRTIM_WaveformCountStart(&hhrtim1,
+                                    HRTIM_TIMERID_TIMER_A) != HAL_OK)
+    {
+        Error_Handler();
+    }
 
-    HAL_HRTIM_WaveformCountStart(&hhrtim1, HRTIM_TIMERID_MASTER);
-    HAL_HRTIM_SimpleBaseStart(&hhrtim1, HRTIM_TIMERINDEX_MASTER);
+    if(HAL_HRTIM_WaveformCountStart(&hhrtim1,
+                                    HRTIM_TIMERID_MASTER) != HAL_OK)
+    {
+        Error_Handler();
+    }
 }

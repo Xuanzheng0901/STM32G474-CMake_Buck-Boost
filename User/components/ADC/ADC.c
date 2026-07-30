@@ -7,6 +7,7 @@
 #include "adc.h"
 #include "dac.h"
 #include "dma.h"
+#include "main.h"
 #include "opamp.h"
 #include "queue.h"
 #include "ctrl_loop.h"
@@ -15,6 +16,12 @@ static uint32_t ac_adc_buf[2];
 static uint32_t dc_adc_buf[ADC_BUFFER_LENGTH];
 
 QueueHandle_t dc_adc_queue;
+
+static void adc_require_ok(HAL_StatusTypeDef status)
+{
+    if(status != HAL_OK)
+        Error_Handler();
+}
 
 /* ---- ADC12 交流侧 ISR: 逐周期控制 (20kHz) ---- */
 
@@ -57,26 +64,33 @@ void ADC34_cplt_isr(ADC_HandleTypeDef *hadc)
 
 void ADC_init(void)
 {
-    HAL_OPAMP_Start(&hopamp1);
-    HAL_OPAMP_Start(&hopamp3);
+    adc_require_ok(HAL_OPAMP_Start(&hopamp1));
+    adc_require_ok(HAL_OPAMP_Start(&hopamp3));
 
-    HAL_DAC_Start(&hdac3, DAC_CHANNEL_1);
-    HAL_DAC_Start(&hdac3, DAC_CHANNEL_2);
+    adc_require_ok(HAL_DAC_Start(&hdac3, DAC_CHANNEL_1));
+    adc_require_ok(HAL_DAC_Start(&hdac3, DAC_CHANNEL_2));
     dc_adc_queue = xQueueCreate(5, sizeof(uint32_t));
+    if(dc_adc_queue == NULL)
+        Error_Handler();
 
-    HAL_ADC_RegisterCallback(&hadc1, HAL_ADC_CONVERSION_HALF_CB_ID, ADC1_half_cplt_isr);
-    HAL_ADC_RegisterCallback(&hadc1, HAL_ADC_CONVERSION_COMPLETE_CB_ID, ADC1_cplt_isr);
+    adc_require_ok(HAL_ADC_RegisterCallback(
+        &hadc1, HAL_ADC_CONVERSION_HALF_CB_ID, ADC1_half_cplt_isr));
+    adc_require_ok(HAL_ADC_RegisterCallback(
+        &hadc1, HAL_ADC_CONVERSION_COMPLETE_CB_ID, ADC1_cplt_isr));
 
-    HAL_ADC_RegisterCallback(&hadc3, HAL_ADC_CONVERSION_HALF_CB_ID, ADC34_half_cplt_isr);
-    HAL_ADC_RegisterCallback(&hadc3, HAL_ADC_CONVERSION_COMPLETE_CB_ID, ADC34_cplt_isr);
+    adc_require_ok(HAL_ADC_RegisterCallback(
+        &hadc3, HAL_ADC_CONVERSION_HALF_CB_ID, ADC34_half_cplt_isr));
+    adc_require_ok(HAL_ADC_RegisterCallback(
+        &hadc3, HAL_ADC_CONVERSION_COMPLETE_CB_ID, ADC34_cplt_isr));
 
-    HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-    HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
-    HAL_ADCEx_Calibration_Start(&hadc3, ADC_SINGLE_ENDED);
-    HAL_ADCEx_Calibration_Start(&hadc4, ADC_SINGLE_ENDED);
+    adc_require_ok(HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED));
+    adc_require_ok(HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED));
+    adc_require_ok(HAL_ADCEx_Calibration_Start(&hadc3, ADC_SINGLE_ENDED));
+    adc_require_ok(HAL_ADCEx_Calibration_Start(&hadc4, ADC_SINGLE_ENDED));
 
-    HAL_ADCEx_MultiModeStart_DMA(&hadc1, ac_adc_buf, 2);
-    HAL_ADCEx_MultiModeStart_DMA(&hadc3, dc_adc_buf, ADC_BUFFER_LENGTH);
+    adc_require_ok(HAL_ADCEx_MultiModeStart_DMA(&hadc1, ac_adc_buf, 2));
+    adc_require_ok(HAL_ADCEx_MultiModeStart_DMA(
+        &hadc3, dc_adc_buf, ADC_BUFFER_LENGTH));
 
     LOGI("ADC", "已启动");
 }
