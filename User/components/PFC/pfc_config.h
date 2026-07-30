@@ -89,8 +89,8 @@
 #define PFC_V_KP_DEFAULT        0.2f
 #define PFC_V_KI_DEFAULT        0.8f
 #define PFC_V_KD_DEFAULT        0.05f
-#define PFC_V_INTEGRAL_MAX      100.0f
-#define PFC_V_OUTPUT_MAX        5.0f
+#define PFC_V_INTEGRAL_MAX      1.0e6f
+#define PFC_V_OUTPUT_MAX        10.0f
 
 /* ==================== 过零换向参数 ==================== */
 #define PFC_MIN_RUN_VOUT_V          3.0f    /**< 母线低于此值时保持功率管关闭 */
