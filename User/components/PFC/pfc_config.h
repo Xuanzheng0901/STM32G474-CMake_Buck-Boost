@@ -62,6 +62,21 @@
 #define PFC_VOLTAGE_LOOP_FREQ   100.0f       /**< 电压外环频率 (Hz) */
 #define PFC_SOFTSTART_SEC       1.0f         /**< 软启动持续时间 (s) */
 
+/* ==================== 启动资格参数 ==================== */
+#define PFC_GRID_FREQ_HZ             50.0f
+#define PFC_VRMS_SAMPLE_COUNT        400U
+#define PFC_GRID_START_VRMS          25.0f
+#define PFC_GRID_STOP_VRMS           20.0f
+#define PFC_GRID_START_CYCLES         5U
+#define PFC_GRID_LOST_CYCLES          3U
+#define PFC_PLL_LOCK_FREQ_TOL_HZ      2.0f
+#define PFC_PLL_LOCK_Q_RATIO          0.15f
+#define PFC_PLL_LOCK_MIN_D_PU         0.20f
+#define PFC_PLL_LOCK_CYCLES           3U
+#define PFC_PLL_LOST_CYCLES           5U
+#define PFC_VOUT_READY_TOLERANCE_V    2.0f
+#define PFC_VOUT_READY_TICKS         20U
+
 /* ==================== 控制器默认参数 ==================== */
 /* 电流内环: 50Hz 准 PR，带宽参数决定谐振峰宽度而非电流环总带宽 */
 #define PFC_I_PR_KP_DEFAULT       0.1f
@@ -87,7 +102,6 @@
 /* ==================== 保护参数 ==================== */
 #define PFC_OVP_RATIO           1.2f        /**< 过压保护阈值 = Vout_target × ratio */
 #define PFC_OCP_AMPS            3.5f        /**< 过流保护阈值 (A) */
-#define PFC_UVP_VIN_RMS         5.0f        /**< 电网欠压阈值 RMS (V), 低于此值视为电网丢失 */
 #define PFC_SS_TIMEOUT_SEC      5.0f        /**< 软启动超时 (s), 超时未达目标触发故障 */
 #define PFC_FAULT_RETRY_MS      5000        /**< 故障后重试间隔 (ms) */
 

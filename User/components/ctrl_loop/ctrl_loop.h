@@ -33,8 +33,10 @@ void ctrl_loop_set_vout(float32_t vout);
 float32_t ctrl_loop_get_vref(void);
 float32_t ctrl_loop_get_voltage(void);
 float32_t ctrl_loop_get_current(void);
+float32_t ctrl_loop_get_input_voltage_rms(void);
 float32_t ctrl_loop_get_i_amplitude(void);
 float32_t ctrl_loop_get_duty(void);
+PfcFaultReason ctrl_loop_get_fault_reason(void);
 
 /* 运行时调谐电流准 PR / 电压 PI 参数 */
 bool ctrl_loop_set_current_pr(float32_t kp, float32_t kr, float32_t bandwidth_hz);

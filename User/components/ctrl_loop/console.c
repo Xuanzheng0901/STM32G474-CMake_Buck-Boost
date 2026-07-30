@@ -46,6 +46,19 @@ static void console_task(void *pvParameters)
 
         switch(cmd)
         {
+            case 's':
+            case 'S':
+                LOGI("console",
+                     "state=%u fault=%u Vin=%.2fV Vbus=%.2fV "
+                     "Vref=%.2fV retry=%lu",
+                     (unsigned)ctrl_loop_get_state(),
+                     (unsigned)ctrl_loop_get_fault_reason(),
+                     ctrl_loop_get_input_voltage_rms(),
+                     ctrl_loop_get_voltage(),
+                     ctrl_loop_get_vref(),
+                     (unsigned long)ctrl_loop_state_get_retry_count());
+                break;
+
             case 'v':
             case 'V':
                 if(n >= 4)
@@ -75,7 +88,7 @@ static void console_task(void *pvParameters)
                 break;
 
             default:
-                LOGE("console", "未知命令: %c (可用: V/I)", cmd);
+                LOGE("console", "未知命令: %c (可用: S/V/I)", cmd);
         }
 
         memset(rx_buf, 0, RX_BUF_SIZE);

@@ -33,14 +33,26 @@ extern QueueHandle_t ADC_get_dc_queue(void);
 static pr_ctrl_t i_pr;                  /* 电流内环准 PR */
 static pid_ctrl_block_handle_t v_pid;   /* 电压外环 PID */
 
-static float32_t i_amplitude;           /* 电流参考幅值 */
-static float32_t duty_current;          /* 当前占空比 */
+static volatile float32_t i_amplitude;  /* task writes, 20kHz ISR reads */
+static volatile float32_t duty_current; /* ISR writes, task/UI reads */
 static uint8_t hw_polarity;            /* 上次写入硬件的极性 */
 static float32_t pol_cos_off = 1.0f;   /* cos(offset) */
 static float32_t pol_sin_off = 0.0f;   /* sin(offset) */
 
-static float now_vout_V;                /* DC 输出电压 (V) */
-static float now_iout_A;                /* DC 输出电流 (A) */
+static volatile float now_vout_V;       /* task writes, 20kHz ISR reads */
+static volatile float now_iout_A;       /* task writes, UI reads */
+
+static volatile float now_vin_rms_V;
+
+/*
+ * DMA1 Channel 1 runs above the FreeRTOS syscall ceiling. The 20kHz ISR
+ * therefore publishes completed periods through a ping-pong buffer without
+ * calling any RTOS API.
+ */
+static uint16_t vin_sample_buffer[2][PFC_VRMS_SAMPLE_COUNT];
+static volatile uint16_t vin_sample_index;
+static volatile uint8_t vin_active_buffer;
+static volatile uint8_t vin_ready_buffer = 0xFFU;
 
 typedef enum {
     PFC_COMM_HOLD = 0,
@@ -62,6 +74,71 @@ static uint16_t comm_stable_samples;
     .max_output = PFC_V_OUTPUT_MAX,  .min_output = 0.0f, \
     .max_integral = PFC_V_INTEGRAL_MAX, .min_integral = 0.0f, \
     .cal_type = PID_CAL_TYPE_INCREMENTAL }
+
+static inline void ctrl_loop_record_vin_sample(uint16_t raw)
+{
+    uint8_t active = vin_active_buffer;
+    uint16_t index = vin_sample_index;
+
+    vin_sample_buffer[active][index] = raw;
+    index++;
+
+    if(index < PFC_VRMS_SAMPLE_COUNT)
+    {
+        vin_sample_index = index;
+        return;
+    }
+
+    vin_sample_index = 0U;
+    vin_active_buffer = active ^ 1U;
+
+    __DMB();
+    vin_ready_buffer = active;
+}
+
+static float32_t ctrl_loop_calculate_vin_rms(const uint16_t *samples)
+{
+    uint64_t sum = 0U;
+    uint64_t sum_sq = 0U;
+
+    for(uint16_t i = 0U; i < PFC_VRMS_SAMPLE_COUNT; i++)
+    {
+        uint32_t sample = samples[i];
+        sum += sample;
+        sum_sq += (uint64_t)sample * sample;
+    }
+
+    float32_t mean = (float32_t)sum / (float32_t)PFC_VRMS_SAMPLE_COUNT;
+    float32_t variance =
+            (float32_t)sum_sq / (float32_t)PFC_VRMS_SAMPLE_COUNT - mean * mean;
+
+    if(variance < 0.0f)
+        variance = 0.0f;
+
+    return sqrtf(variance) / PFC_VIN_LSB_PER_V;
+}
+
+static bool ctrl_loop_update_vin_rms(void)
+{
+    uint8_t ready = vin_ready_buffer;
+
+    if(ready == 0xFFU)
+        return false;
+
+    __DMB();
+    float32_t rms = ctrl_loop_calculate_vin_rms(vin_sample_buffer[ready]);
+
+    /* Discard only if an abnormally delayed task let the ISR reuse this buffer. */
+    __DMB();
+    if(ready == vin_active_buffer)
+        return false;
+
+    if(vin_ready_buffer == ready)
+        vin_ready_buffer = 0xFFU;
+
+    now_vin_rms_V = rms;
+    return true;
+}
 
 static void ctrl_loop_reset_comm_validation(void)
 {
@@ -138,6 +215,8 @@ void ctrl_loop_ac_isr(uint32_t adc_word)
     int32_t v_raw = (int32_t)(adc_word & 0x0FFF);
     int32_t i_raw = (int32_t)(adc_word >> 16);
 
+    ctrl_loop_record_vin_sample((uint16_t)v_raw);
+
     HAL_DAC_SetValue(&hdac3, DAC_CHANNEL_2, DAC_ALIGN_12B_R,
                      (uint16_t)(i_raw));
     /*
@@ -179,11 +258,34 @@ static void dc_data_process(uint32_t *buf)
     now_iout_A = ((float)i_sum / len - PFC_IOUT_OFFSET) / PFC_IOUT_LSB_PER_A;
 
     /* 状态机更新 (含故障检测) → Vref */
-    float32_t vref = ctrl_loop_state_update(now_vout_V, now_iout_A);
-    if(ctrl_loop_state_get() == CTRL_STATE_FAULT)
+    bool vin_cycle_valid = ctrl_loop_update_vin_rms();
+    CtrlLoop_State previous_state = ctrl_loop_state_get();
+    float32_t vref = ctrl_loop_state_update(now_vout_V,
+                                            now_iout_A,
+                                            now_vin_rms_V,
+                                            vin_cycle_valid,
+                                            spll.u_D[0],
+                                            spll.u_Q[0],
+                                            spll.fo);
+    CtrlLoop_State current_state = ctrl_loop_state_get();
+
+    if((current_state != CTRL_STATE_SOFT_START) &&
+       (current_state != CTRL_STATE_RUNNING))
     {
+        if((previous_state == CTRL_STATE_SOFT_START) ||
+           (previous_state == CTRL_STATE_RUNNING))
+        {
+            pid_reset_ctrl_block(v_pid);
+        }
         i_amplitude = 0.0f;
         return;
+    }
+
+    if((current_state == CTRL_STATE_SOFT_START) &&
+       (previous_state != CTRL_STATE_SOFT_START))
+    {
+        pid_reset_ctrl_block(v_pid);
+        i_amplitude = 0.0f;
     }
 
     /* 电压外环 PI */
@@ -236,13 +338,21 @@ void ctrl_loop_init(void)
     duty_current = 0.0f;
     now_vout_V = 0.0f;
     now_iout_A = 0.0f;
+    now_vin_rms_V = 0.0f;
+    vin_sample_index = 0U;
+    vin_active_buffer = 0U;
+    vin_ready_buffer = 0xFFU;
 
     ctrl_loop_set_polarity_offset(0.0f);
 
     /* 功率级初始安全态: 快慢桥全关, 体二极管完成预充电。 */
     ctrl_loop_hold_power_stage_off();
 
-    xTaskCreate(ctrl_loop_routine, "CtrlLoop", 2048, NULL, 15, NULL);
+    if(xTaskCreate(ctrl_loop_routine, "CtrlLoop", 2048, NULL, 15, NULL) !=
+       pdPASS)
+    {
+        Error_Handler();
+    }
 }
 
 CtrlLoop_State ctrl_loop_get_state(void)
@@ -256,7 +366,9 @@ void ctrl_loop_current_isr(float32_t vin_inst, float32_t il_inst,
                            float32_t vout, float32_t ref_wave,
                            uint8_t polarity)
 {
-    if((ctrl_loop_state_get() == CTRL_STATE_FAULT) ||
+    CtrlLoop_State control_state = ctrl_loop_state_get();
+    if(((control_state != CTRL_STATE_SOFT_START) &&
+        (control_state != CTRL_STATE_RUNNING)) ||
        (vout < PFC_MIN_RUN_VOUT_V))
     {
         if(comm_state != PFC_COMM_HOLD)
@@ -369,7 +481,6 @@ void ctrl_loop_set_voltage_pi(float32_t kp, float32_t ki, float32_t kd)
 
 void ctrl_loop_clear_fault(void)
 {
-    ctrl_loop_hold_power_stage_off();
     pid_reset_ctrl_block(v_pid);
     ctrl_loop_state_clear_fault();
     i_amplitude = 0.0f;
@@ -390,6 +501,16 @@ float32_t ctrl_loop_get_voltage(void)
 float32_t ctrl_loop_get_current(void)
 {
     return now_iout_A;
+}
+
+float32_t ctrl_loop_get_input_voltage_rms(void)
+{
+    return now_vin_rms_V;
+}
+
+PfcFaultReason ctrl_loop_get_fault_reason(void)
+{
+    return ctrl_loop_state_get_fault_reason();
 }
 
 float32_t ctrl_loop_get_i_amplitude(void)
