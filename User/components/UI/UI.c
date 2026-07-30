@@ -272,7 +272,7 @@ static void home_page_init(void)
         lv_obj_align(set_label, LV_ALIGN_TOP_LEFT, 0, 64);
 
         line_voltage_spinbox = lv_spinbox_create(lv_screen_active());
-        lv_spinbox_set_range(line_voltage_spinbox, 0, 3300);
+        lv_spinbox_set_range(line_voltage_spinbox, 0, 3200);
         lv_spinbox_set_digit_format(line_voltage_spinbox, 4, 2);
         lv_spinbox_set_step(line_voltage_spinbox, 1);
 

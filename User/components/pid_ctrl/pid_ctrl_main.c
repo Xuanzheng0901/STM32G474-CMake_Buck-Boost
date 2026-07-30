@@ -289,7 +289,7 @@ static void adc_data_process(uint32_t *adc12_data, uint16_t *adc3_data)
         }
 
         now_voltage_mV[ph] = kalman_1d_update(&kf_voltage[ph], raw_voltage_mV);
-        now_voltage_mV[ph] -= 100;
+        now_voltage_mV[ph] -= 80;
 
         if(now_voltage_mV[ph] < 0.0f)
             now_voltage_mV[ph] = 0.0f;
